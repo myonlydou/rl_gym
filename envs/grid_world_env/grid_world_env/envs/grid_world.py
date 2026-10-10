@@ -276,6 +276,39 @@ class GridWorldEnv(gym.Env):
                 np.array(pygame.surfarray.pixels3d(canvas)), axes=(1, 0, 2)
             )
 
+    def build_mdp(self):
+        cells = [(x, y) for x in range(self.size) for y in range(self.size)]
+        states_idx = {cell: i for i, cell in enumerate(cells)}
+
+        n_states = self.size**2
+        n_actions = self.action_space.n  # type: ignore
+
+        P = np.zeros((n_states, n_actions, n_states))
+        R = np.zeros((n_states, n_actions, n_states))
+
+        for x, y in cells:
+            for action in range(n_actions):
+                direction = self._action_to_direction[action]
+                nx, ny = x + direction[0], y + direction[1]
+
+                if (
+                    self._is_out_of_boundary((nx, ny))
+                    or (nx, ny) in self._forbidden_locations
+                ):
+                    nx, ny = x, y
+                    reward = -1
+                elif (nx, ny) == tuple(self._target_location):
+                    reward = 1
+                else:
+                    reward = 0
+
+                state_id = states_idx[(x, y)]
+                n_state_id = states_idx[(nx, ny)]
+                P[state_id, action, n_state_id] = 1.0
+                R[state_id, action, n_state_id] = reward
+
+        return P, R, cells, states_idx
+
     def close(self):
         if self.window is not None:
             pygame.display.quit()

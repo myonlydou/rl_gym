@@ -1,106 +1,95 @@
-import numpy as np
-import gymnasium as gym
 from grid_world_env.envs.grid_world import GridWorldEnv, Actions
+from gymnasium.wrappers import TimeLimit
+import copy
 
 
 class PolicyIteration:
-    def __init__(self, env, theta, gamma) -> None:
-        self.env = env
-        self.size = env.size
+    def __init__(self, P, R, theta, gamma) -> None:
+        self.n_states = P.shape[0]
+        self.n_actions = P.shape[1]
+        self.v = [0] * self.n_states
+        self.pi = [[1 / self.n_actions] * self.n_actions for _ in range(self.n_states)]
 
+        self.P = P
+        self.R = R
         self.theta = theta
         self.gamma = gamma
 
-        self.P, self.R, self.terminal, self.cells, self.states_idx = self._build_mdp()
-
-        n_actions = self.env.action_space.n  # type: ignore
-
-        self.pi = np.ones((self.n_states, n_actions)) / n_actions
-        self.V = np.zeros(self.n_states)
-
-    def reset(self):
-        self.env.reset()
-
-        self.P, self.R, self.terminal, self.cells, self.states_idx = self._build_mdp()
-
-        n_actions = self.env.action_space.n  # type: ignore
-
-        self.pi = np.ones((self.n_states, n_actions)) / n_actions
-        self.V = np.zeros(self.n_states)
-
-    def _is_out_of_boundary(self, x, y, size):
-        return x < 0 or x >= size or y < 0 or y >= size
-
-    def _build_mdp(self):
-
-        target_location = tuple(self.env._target_location)
-        forbidden_locations = self.env._forbidden_locations
-
-        cells = [(x, y) for x in range(self.size) for y in range(self.size)]
-        states_idx = {cell: i for i, cell in enumerate(cells)}
-
-        self.n_states = len(cells)
-        n_actions = self.env.action_space.n  # type: ignore
-
-        action_to_dir = self.env._action_to_direction
-
-        P = np.zeros((self.n_states, n_actions, self.n_states))
-        R = np.zeros((self.n_states, n_actions))
-
-        terminal = np.zeros(self.n_states, dtype=bool)
-        terminal[states_idx[target_location]] = True
-
-        for x, y in cells:
-            for action in range(n_actions):
-                dir = action_to_dir[action]
-                nx, ny = x + dir[0], y + dir[1]
-
-                if (
-                    self._is_out_of_boundary(nx, ny, self.size)
-                    or (nx, ny) in forbidden_locations
-                ):
-                    nx, ny = nx - dir[0], ny - dir[1]
-                    reward = -1
-                elif (nx, ny) == target_location:
-                    reward = 1
-                else:
-                    reward = 0
-
-                state_id = states_idx[(x, y)]
-                n_state_id = states_idx[(nx, ny)]
-                P[state_id, action, n_state_id] = 1.0
-                R[state_id, action] = reward
-
-        return P, R, terminal, cells, states_idx
-
     def _policy_evaluation(self):
-        delta = 0.0
+        cnt = 0
         while True:
+            delta = 0.0
+            next_v = [0] * self.n_states
             for s in range(self.n_states):
-                if self.terminal[s]:
-                    continue
-                a = self.pi[s]
-                v = self.V[s]
+                for a in range(self.n_actions):
+                    qsa = 0
+                    for i, p in enumerate(self.P[s][a]):
+                        qsa += p * self.R[s][a][i] + self.gamma * p * self.v[i]
+                    next_v[s] += self.pi[s][a] * qsa
+                delta = max(delta, abs(next_v[s] - self.v[s]))
 
-                self.V[s] = self.R[s, a] + self.gamma * float(
-                    np.dot(self.P[s, a], self.V)
-                )
-                delta = max(delta, abs(v - self.V[s]))
+            self.v = next_v
+            cnt += 1
 
             if delta < self.theta:
+                print(f"policy evaluation converged in {cnt} iterations...")
                 break
+
+        return self.v
+
+    def _policy_improvement(self):
+        for s in range(self.n_states):
+            qsa_list = []
+            for a in range(self.n_actions):
+                qsa = 0
+                for i, p in enumerate(self.P[s][a]):
+                    qsa += p * self.R[s][a][i] + self.gamma * p * self.v[i]
+                qsa_list.append(qsa)
+            max_qsa = max(qsa_list)
+            n_max_qsa = qsa_list.count(max_qsa)
+
+            self.pi[s] = [1 / n_max_qsa if qsa == max_qsa else 0 for qsa in qsa_list]
+        print("policy improvement...")
+        return self.pi
+
+    def policy_iteration(self):
+        while True:
+            self._policy_evaluation()
+            old_pi = copy.deepcopy(self.pi)  # 将列表进行深拷贝,方便接下来进行比较
+            new_pi = self._policy_improvement()
+
+            if old_pi == new_pi:
+                return new_pi
 
 
 if __name__ == "__main__":
+    import numpy as np
 
-    env = GridWorldEnv()
+    env = TimeLimit(GridWorldEnv(render_mode="human", size=10), max_episode_steps=20)
+
+    base_env: GridWorldEnv = env.unwrapped  # type: ignore
+
     env.reset()
 
-    pi = PolicyIteration(env, theta=0.1, gamma=0.5)
+    P, R, cells, states_idx = base_env.build_mdp()
 
-    pi._policy_evaluation()
+    it = PolicyIteration(P, R, 0.001, 0.9)
 
-    print(pi.V)
+    pi = it.policy_iteration()
+
+    episode_over = False
+    total_reward = 0.0
+
+    while not episode_over:
+        s = states_idx[tuple(base_env._agent_location)]
+        a = int(np.argmax(pi[s]))
+
+        obs, r, terminated, truncated, info = env.step(a)
+
+        total_reward += float(r)
+
+        print(f"s={cells[s]} a={Actions(a).name} r={r:+d} 累计={total_reward:+.0f}")
+
+        episode_over = terminated or truncated
 
     env.close()
-    pass
