@@ -34,7 +34,7 @@ class GridWorldEnv(gym.Env):
             np.array(start_cell, dtype=int) if start_cell is not None else None
         )
 
-        self._forbidden_location = set()
+        self._forbidden_locations = set()
         if forbidden_cells is not None:
             for cell in forbidden_cells:
                 cell = tuple(int(v) for v in cell)
@@ -43,16 +43,16 @@ class GridWorldEnv(gym.Env):
                     0 <= cell[0] < self.size and 0 <= cell[1] < self.size
                 ), "forbidden is out of boundary"
 
-                self._forbidden_location.add(cell)
+                self._forbidden_locations.add(cell)
 
         if self._fixed_agent_location is not None:
             assert (
-                tuple(self._fixed_agent_location) not in self._forbidden_location
+                tuple(self._fixed_agent_location) not in self._forbidden_locations
             ), "start_cell should not be forbidden!"
 
         if self._fixed_target_location is not None:
             assert (
-                tuple(self._fixed_target_location) not in self._forbidden_location
+                tuple(self._fixed_target_location) not in self._forbidden_locations
             ), "target_cell should not be forbidden!"
 
         # Observations are dictionaries with the agent's and the target's location.
@@ -114,6 +114,24 @@ class GridWorldEnv(gym.Env):
         location = np.asarray(agent_location)
         return bool(np.any(location < 0) or np.any(location >= self.size))
 
+    def _generate_random_forbidden(self, reserved):
+        total = self.size * self.size
+        ratio = self.np_random.uniform(0.05, 0.3)
+        n_forbidden = int(round(total * ratio))
+
+        candidates = [
+            (x, y)
+            for x in range(self.size)
+            for y in range(self.size)
+            if (x, y) not in reserved
+        ]
+        # 避免采样数超过可选数量
+        n_forbidden = min(n_forbidden, len(candidates))
+
+        # 不重复抽样
+        idx = self.np_random.choice(len(candidates), size=n_forbidden, replace=False)
+        return {candidates[i] for i in idx}
+
     def reset(self, *, seed=None, options=None):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
@@ -134,6 +152,10 @@ class GridWorldEnv(gym.Env):
             else self._fixed_target_location.copy()
         )
 
+        if not len(self._forbidden_locations):
+            reserved = {tuple(self._agent_location), tuple(self._target_location)}
+            self._forbidden_locations = self._generate_random_forbidden(reserved)
+
         observation = self._get_obs()
         info = self._get_info()
 
@@ -151,12 +173,12 @@ class GridWorldEnv(gym.Env):
 
         if np.array_equal(self._agent_location, self._target_location):
             reward = 1
-        elif tuple(self._agent_location) in self._forbidden_location:
+        elif (
+            self._is_out_of_boundary(self._agent_location)
+            or tuple(self._agent_location) in self._forbidden_locations
+        ):
             reward = -1
             self._agent_location = self._agent_location - direction
-        elif self._is_out_of_boundary(self._agent_location):
-            reward = -1
-            self._agent_location = np.clip(self._agent_location, 0, self.size - 1)
         else:
             reward = 0
 
@@ -198,7 +220,7 @@ class GridWorldEnv(gym.Env):
         )
 
         # 画 forbidden
-        for x, y in self._forbidden_location:
+        for x, y in self._forbidden_locations:
             pygame.draw.rect(
                 canvas,
                 ((254, 192, 1)),
