@@ -80,6 +80,34 @@ $$q_\pi(s,a)=\sum_{s'} p(s'\mid s,a)\bigl[R(s,a,s')+\gamma v_\pi(s')\bigr]$$
 即 `qsa += p * R[s][a][s'] + gamma * p * v[s']`。**不要**把它和 `R[s, a]` 标量（`R(s,a)` 与 `s'` 无关）的写法混用：
 标量约定下 `R` 只能在概率求和之外加一次，写成 `Σ p·R` 会在 `Σp ≠ 1` 时静默算错。
 
+### 在渲染里直接看策略：`set_policy()`
+
+把策略交给环境后，**每一帧渲染都会把策略画在地图上**（`render_mode="human"` 和 `"rgb_array"` 走同一套逻辑）：
+
+```python
+env = GridWorldEnv(render_mode="human", size=10)
+env.reset()                                     # 先 reset，目标格/禁区才定下来
+P, R, cells, states_idx = env.build_mdp()
+pi = PolicyIteration(P, R, theta=1e-3, gamma=0.9).policy_iteration()
+
+env.set_policy(pi)                              # 之后每帧都叠加策略
+
+while not episode_over:                         # 实跑时能看着策略走
+    obs, r, terminated, truncated, info = env.step(int(np.argmax(pi[s])))
+```
+
+| 画面元素 | 含义 |
+|---|---|
+| 箭头 | 该状态的策略动作（`right` / `up` / `left` / `down`） |
+| 圆点 | 该状态的策略动作是 `stay` |
+| 青色 /橙色 | `target` / `forbidden`（禁区格不画策略，因为实际交互中永远走不到） |
+
+- `set_policy(policy)` 的 `policy` 接受 `(n_states, n_actions)` 概率（`pi` 直接可传）、`(n_states,)` / `(size, size)` 动作编号、`(size, size, n_actions)` 概率；`set_policy(None)` 清除叠加。
+- 默认每格只画 `argmax_a pi(a|s)`；`set_policy(pi, show_ties=True)` 会把并列最优的多个动作并排错开画出（`left`+`right` 这种反向并列也不会重叠）。
+- 不调用 `set_policy()` 时，渲染与原来完全一致（只有 agent / target / forbidden），不会有任何额外开销。
+- 外观可调：`env.policy_arrow_scale`（箭头长度，单位格）、`env.policy_stay_radius`、`env.policy_color`、`env.policy_current_color`；播放速度由 `metadata["render_fps"]` 控制。
+- 策略是**针对某张地图**（目标格 + 禁区）算出来的：如果重新 `reset()` 换了目标格，需要重新算 `pi` 再 `set_policy()`。
+
 ---
 
 ## 算法
@@ -120,13 +148,9 @@ pip install -e envs/grid_world_env
 ## 运行
 
 ```bash
-python algorithms/policy_iteration.py
+python algorithms/policy_iteration.py   # 策略迭代 + 在 pygame 里实跑一个 episode（画面里带策略箭头）
 ```
-
-程序会：`reset()` 环境 → `build_mdp()` 建表 → 策略迭代求出 `pi` → 在 `GridWorldEnv` 中按 `pi` 实跑一个 episode。
-
-
-
+`policy_iteration.py` 程序会：`reset()` 环境 → `build_mdp()` 建表 → 策略迭代求出 `pi` → `set_policy(pi)` 让渲染叠加策略 → 在 `GridWorldEnv` 中按 `pi` 实跑一个 episode（每走一步都能看到红色箭头指示当前状态所选的动作）。
 ---
 
 ## 参考

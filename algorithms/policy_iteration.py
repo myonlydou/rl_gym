@@ -64,8 +64,9 @@ class PolicyIteration:
 
 if __name__ == "__main__":
     import numpy as np
+    import time
 
-    env = TimeLimit(GridWorldEnv(render_mode="human", size=10), max_episode_steps=20)
+    env = TimeLimit(GridWorldEnv(render_mode="human", size=5), max_episode_steps=40)
 
     base_env: GridWorldEnv = env.unwrapped  # type: ignore
 
@@ -76,6 +77,10 @@ if __name__ == "__main__":
     it = PolicyIteration(P, R, 0.001, 0.9)
 
     pi = it.policy_iteration()
+
+    # 把策略交给环境：render_mode="human" 时每格画出箭头/圆点，
+    # 当前 agent 所在格的动作用红色高亮，跑 episode 时能直接看出它按策略在走
+    base_env.set_policy(pi, show_ties=True)
 
     episode_over = False
     total_reward = 0.0
@@ -88,8 +93,10 @@ if __name__ == "__main__":
 
         total_reward += float(r)
 
-        print(f"s={cells[s]} a={Actions(a).name} r={r:+d} 累计={total_reward:+.0f}")
+        print(f"s={cells[s]} a={Actions(a).name} r={r:+.2f} 累计={total_reward:+.2f}")
 
         episode_over = terminated or truncated
+
+    time.sleep(5)
 
     env.close()
