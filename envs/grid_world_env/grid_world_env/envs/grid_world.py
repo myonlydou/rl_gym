@@ -44,6 +44,9 @@ class GridWorldEnv(gym.Env):
                 ), "forbidden is out of boundary"
 
                 self._forbidden_locations.add(cell)
+        self._fixed_forbidden_locations = (
+            self._forbidden_locations if forbidden_cells is not None else None
+        )
 
         if self._fixed_agent_location is not None:
             assert (
@@ -164,7 +167,7 @@ class GridWorldEnv(gym.Env):
             else self._fixed_target_location.copy()
         )
 
-        if not len(self._forbidden_locations):
+        if self._fixed_forbidden_locations is None:
             reserved = {tuple(self._agent_location), tuple(self._target_location)}
             self._forbidden_locations = self._generate_random_forbidden(reserved)
 
@@ -178,6 +181,7 @@ class GridWorldEnv(gym.Env):
 
     def step(self, action):
         terminated = False
+
         # Map the action (element of {0,1,2,3}) to the direction we walk in
         direction = self._action_to_direction[action]
         # We use `np.clip` to make sure we don't leave the grid
