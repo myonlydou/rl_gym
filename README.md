@@ -12,8 +12,8 @@
 ```
 rl_gym/
 ├── algorithms/
-│   ├── policy_iteration.py      # 表格法策略迭代（策略评估 + 策略改进）已实现
-│   └── value_iteration.py       # 值迭代（占位，待实现）
+│   ├── policy_iteration.py      # 策略迭代（策略评估 + 策略改进）
+│   └── value_iteration.py       # 值迭代
 ├── envs/
 │   └── grid_world_env/          # 自定义 Gymnasium 环境包（可 pip install -e）
 │       ├── grid_world_env/
@@ -121,15 +121,21 @@ pi = it.policy_iteration()
 
 | 方法 | 说明 |
 |---|---|
-| `_policy_evaluation()` | 迭代策略评估。同步（Jacobi）更新：`next_v` 与 `self.v` 分开，一轮扫完再整体写回；用 sup-norm 判停 `max_s|v_new(s) − v_old(s)| < theta` |
+| `_policy_evaluation()` | 迭代策略评估。同步（Jacobi）更新：`next_v` 与 `self.v` 分开，一轮扫完再整体写回；用 sup-norm 判停 `max_s(v_new(s) − v_old(s))< theta`|
 | `_policy_improvement()` | 策略改进。对每个状态取 `argmax_a q(s, a)`；并列最优的动作均分概率 |
-| `policy_iteration()` | 交替执行 `评估 → 改进`，直到 `old_pi == new_pi`（策略不再变化，即收敛到最优策略） |
+| `policy_iteration()` | 交替执行 `_policy_evaluation() → _policy_improvement()`，直到 `old_pi == new_pi`（策略不再变化，即收敛到最优策略） |
 
-停止准则的误差上界为 $\lVert v-v^\* \rVert_\infty \le \dfrac{\theta\gamma}{1-\gamma}$：`theta=1e-3, gamma=0.9` 时约 `9e-3`，实测误差与该上界吻合。
+### Value Iteration（`algorithms/value_iteration.py`）✅
 
-### Value Iteration（`algorithms/value_iteration.py`）🚧
+```python
+it = ValueIteration(P, R, theta=0.001, gamma=0.9)
+pi = it.value_iteration()
+```
 
-占位文件，待实现。
+| 方法 | 说明 |
+|---|---|
+| `value_iteration()` | 对每个状态取 `argmax_a q(s, a)`，取使`q(s, a)`最大的动作为新策略, 取最大`q(s, a)`为`v_new(s)`，直到 `max_s(v_new(s) − v_old(s))< theta` |
+
 
 ---
 
@@ -148,9 +154,9 @@ pip install -e envs/grid_world_env
 ## 运行
 
 ```bash
-python algorithms/policy_iteration.py   # 策略迭代 + 在 pygame 里实跑一个 episode（画面里带策略箭头）
+python algorithms/policy_iteration.py   # 策略迭代 
+python algorithms/value_iteration.py    # 价值迭代 
 ```
-`policy_iteration.py` 程序会：`reset()` 环境 → `build_mdp()` 建表 → 策略迭代求出 `pi` → `set_policy(pi)` 让渲染叠加策略 → 在 `GridWorldEnv` 中按 `pi` 实跑一个 episode（每走一步都能看到红色箭头指示当前状态所选的动作）。
 ---
 
 ## 参考
@@ -165,7 +171,7 @@ python algorithms/policy_iteration.py   # 策略迭代 + 在 pygame 里实跑一
 
 - [x] 带 forbidden cell 的 `GridWorldEnv`
 - [x] 策略迭代（Policy Iteration）
-- [ ] 值迭代（Value Iteration）
+- [x] 值迭代（Value Iteration）
 - [ ] 蒙特卡洛方法（MC Prediction / MC Control）
 - [ ] 时序差分：Sarsa、Q-learning、Expected Sarsa
 - [ ] 值函数近似 / 策略梯度（Actor-Critic）
