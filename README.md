@@ -88,9 +88,10 @@ $$q_\pi(s,a)=\sum_{s'} p(s'\mid s,a)\bigl[R(s,a,s')+\gamma v_\pi(s')\bigr]$$
 env = GridWorldEnv(render_mode="human", size=10)
 env.reset()                                     # 先 reset，目标格/禁区才定下来
 P, R, cells, states_idx = env.build_mdp()
-pi = PolicyIteration(P, R, theta=1e-3, gamma=0.9).policy_iteration()
+pi, v = PolicyIteration(P, R, theta=1e-3, gamma=0.9).policy_iteration()
 
 env.set_policy(pi)                              # 之后每帧都叠加策略
+env.set_v(v)                                    # 顺便把 V(s) 也显示出来
 
 while not episode_over:                         # 实跑时能看着策略走
     obs, r, terminated, truncated, info = env.step(int(np.argmax(pi[s])))
@@ -107,6 +108,26 @@ while not episode_over:                         # 实跑时能看着策略走
 - 不调用 `set_policy()` 时，渲染与原来完全一致（只有 agent / target / forbidden），不会有任何额外开销。
 - 外观可调：`env.policy_arrow_scale`（箭头长度，单位格）、`env.policy_stay_radius`、`env.policy_color`、`env.policy_current_color`；播放速度由 `metadata["render_fps"]` 控制。
 - 策略是**针对某张地图**（目标格 + 禁区）算出来的：如果重新 `reset()` 换了目标格，需要重新算 `pi` 再 `set_policy()`。
+
+### 在渲染里直接看价值：`set_v()`
+
+和 `set_policy()` 平行的另一层：`set_v(v)` 之后，**每帧都会把 `V(s)` 写在每格左上角**（两个叠加层互不影响，可以只开一个，也可以同时开）：
+
+```python
+env.set_v(v)                # 一维长度 n_states（ValueIteration.v / PolicyIteration 的 v 直接可传）
+env.set_v(v, fmt="{:.1f}")  # 顺便改数值格式；也可以传 (size, size) 二维数组
+env.set_v(None)             # 清除价值叠加
+```
+
+| 细节 | 说明 |
+|---|---|
+| 数值来源 | 长度 `n_states` 的一维数组/列表，或 `(size, size)`；按 `s = x*size + y` 解释，与 `build_mdp()` 的 `cells` 顺序一致 |
+| 位置 | 每格左上角，灰字（`v_color`）；禁区格跳过（和策略层一致） |
+| agent 所在格 | 数值会被蓝圆点挡住，所以这一格最后单独重画一次并垫一块 `v_bg_color` 底色，保证读得清 |
+| 可调 | `env.v_color`、`env.v_bg_color`、`env.v_format`（如 `"{:+.2f}"`）、`env.v_font_scale`（字号 = 格子边长 × 该比例，默认 `0.2`） |
+| 报错 | 元素个数不等于 `size²` 时抛 `ValueError`（提示应为 `n_states` 或 `(size, size)`） |
+| 未调用时 | 完全等价于原渲染，没有任何额外开销（`env.v is None`） |
+
 
 ---
 

@@ -54,12 +54,12 @@ class PolicyIteration:
 
     def policy_iteration(self):
         while True:
-            self._policy_evaluation()
+            v = self._policy_evaluation()
             old_pi = copy.deepcopy(self.pi)  # 将列表进行深拷贝,方便接下来进行比较
             new_pi = self._policy_improvement()
 
             if old_pi == new_pi:
-                return new_pi
+                return new_pi, v
 
 
 if __name__ == "__main__":
@@ -76,11 +76,12 @@ if __name__ == "__main__":
 
     it = PolicyIteration(P, R, 0.001, 0.9)
 
-    pi = it.policy_iteration()
+    pi, v = it.policy_iteration()
 
     # 把策略交给环境：render_mode="human" 时每格画出箭头/圆点，
     # 当前 agent 所在格的动作用红色高亮，跑 episode 时能直接看出它按策略在走
     base_env.set_policy(pi, show_ties=True)
+    base_env.set_v(v)
 
     episode_over = False
     total_reward = 0.0

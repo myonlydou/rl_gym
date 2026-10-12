@@ -109,6 +109,17 @@ class GridWorldEnv(gym.Env):
         self.policy_color = (40, 40, 40)  # 策略本身的颜色
         self.policy_current_color = (220, 40, 40)  # 当前状态所选动作的高亮色
 
+        """
+        价值叠加层：调用 set_v() 之后，_render_frame() 会把 V(s) 写在每格左上角。
+        """
+        self._v_grid = None  # (size, size) 的价值，None 表示不叠加
+        self.v_color = (95, 95, 95)  # 数值文字颜色
+        self.v_bg_color = (255, 255, 255)  # 叠在 agent 圆点上时给文字垫的底色
+        self.v_format = "{:.2f}"  # 数值格式
+        self.v_font_scale = 0.2  # 字号 = 格子边长 * 该比例
+        self._v_font = None  # 缓存 pygame 字体
+        self._v_font_size = None
+
         if render_mode == "human":
             pygame.init()
             pygame.display.init()
@@ -292,6 +303,36 @@ class GridWorldEnv(gym.Env):
         """当前叠加渲染的策略 ``(size, size, n_actions)``，未设置时为 ``None``。"""
         return self._policy_probs
 
+    def set_v(self, v, *, fmt=None):
+        """设置要在渲染里叠加显示的状态价值 ``V(s)``；传 ``None`` 表示清除。
+
+        ``render_mode="human"``（或 ``"rgb_array"``）时，会把 ``V(s)`` 按 ``v_format``
+        格式化后写在每格左上角（禁区格子跳过，和策略层一致）。
+
+        ``v`` 接受长度 ``n_states`` 的一维数组/列表（``ValueIteration.v``、
+        ``PolicyIteration.v`` 可直接传入），或 ``(size, size)`` 的二维数组；
+        统一按 ``s = x * size + y`` 解释，与 :meth:`build_mdp` 的 ``cells`` 顺序一致。
+        """
+        if v is None:
+            self._v_grid = None
+            return
+
+        arr = np.asarray(v, dtype=float)
+        if arr.size != self.size**2:
+            raise ValueError(
+                f"v 的元素个数应为 {self.size**2}（或形状 ({self.size}, {self.size})），"
+                f"收到 {arr.shape}"
+            )
+
+        self._v_grid = arr.reshape(self.size, self.size)
+        if fmt is not None:
+            self.v_format = fmt
+
+    @property
+    def v(self):
+        """当前叠加渲染的价值 ``(size, size)``，未设置时为 ``None``。"""
+        return self._v_grid
+
     def _policy_cell_actions(self, x, y):
         """算出 ``(x, y)`` 这格要画的动作。
 
@@ -362,6 +403,51 @@ class GridWorldEnv(gym.Env):
                 tuple(int(v) for v in np.round(head_base - normal * head_width / 2)),
             ],
         )
+
+    def _draw_values(self, canvas, pix_square_size, cells=None, background=False):
+        """把 ``set_v()`` 设好的 ``V(s)`` 写在每格左上角。
+
+        ``cells`` 不传时画所有非禁区格子；``background=True`` 会在文字下面垫一块
+        ``v_bg_color`` 底色 —— agent 所在格的数值要叠在蓝色圆点上，垫底色才读得清。
+        """
+        if self._v_grid is None:
+            return
+
+        if not pygame.font.get_init():
+            pygame.font.init()
+
+        font_size = max(8, int(round(pix_square_size * self.v_font_scale)))
+        if self._v_font is None or self._v_font_size != font_size:
+            self._v_font = pygame.font.Font(None, font_size)
+            self._v_font_size = font_size
+
+        if cells is None:
+            cells = [
+                (x, y)
+                for x in range(self.size)
+                for y in range(self.size)
+                if (x, y) not in self._forbidden_locations
+            ]
+
+        for x, y in cells:
+            text = self._v_font.render(
+                self.v_format.format(self._v_grid[x, y]), True, self.v_color
+            )
+            screen_x, screen_y = self._cell_to_screen((x, y), pix_square_size)
+            position = (
+                screen_x + pix_square_size * 0.06,
+                screen_y + pix_square_size * 0.04,
+            )
+
+            if background:
+                pad = max(1, int(round(pix_square_size * 0.02)))
+                chip = pygame.Surface(
+                    (text.get_width() + 2 * pad, text.get_height() + 2 * pad)
+                )
+                chip.fill(self.v_bg_color)
+                canvas.blit(chip, (position[0] - pad, position[1] - pad))
+
+            canvas.blit(text, position)
 
     def _draw_policy(self, canvas, pix_square_size, cells=None, color=None):
         """把 ``set_policy()`` 设好的策略画到 canvas 上：每格箭头 / stay 圆点。"""
@@ -447,6 +533,9 @@ class GridWorldEnv(gym.Env):
                 ),
             )
 
+        # 价值叠加层（背景）：V(s) 写在每格左上角（未调用 set_v() 时什么也不画）
+        self._draw_values(canvas, pix_square_size)
+
         # 策略叠加层：箭头 = 动作方向，圆点 = stay（未调用 set_policy() 时什么也不画）
         self._draw_policy(canvas, pix_square_size)
 
@@ -466,6 +555,15 @@ class GridWorldEnv(gym.Env):
                 pix_square_size,
                 cells=[(int(self._agent_location[0]), int(self._agent_location[1]))],
                 color=self.policy_current_color,
+            )
+
+        # agent 所在格的 V(s) 会被圆点盖住，最后垫一层底色重画一遍
+        if self._v_grid is not None:
+            self._draw_values(
+                canvas,
+                pix_square_size,
+                cells=[(int(self._agent_location[0]), int(self._agent_location[1]))],
+                background=True,
             )
 
         # Finally, add some gridlines

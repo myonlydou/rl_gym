@@ -43,7 +43,7 @@ class ValueIteration:
             if delta < self.theta:
                 print(f"value iteration converged in {cnt} iterations...")
                 break
-        return self.pi
+        return self.pi, self.v
 
 
 if __name__ == "__main__":
@@ -60,11 +60,12 @@ if __name__ == "__main__":
 
     it = ValueIteration(P, R, 0.001, 0.9)
 
-    pi = it.value_iteration()
+    pi, v = it.value_iteration()
 
     # 把策略交给环境：render_mode="human" 时每格画出箭头/圆点，
     # 当前 agent 所在格的动作用红色高亮，跑 episode 时能直接看出它按策略在走
     base_env.set_policy(pi, show_ties=True)
+    base_env.set_v(v)
 
     episode_over = False
     total_reward = 0.0
