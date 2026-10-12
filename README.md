@@ -16,7 +16,6 @@ rl_gym/
 │   ├── monte_carlo_exploring_starts.py
 │   ├── policy_iteration.py      # 策略迭代（策略评估 + 策略改进）
 │   └── value_iteration.py       # 值迭代
-
 ├── envs/
 │   └── grid_world_env/          # 自定义 Gymnasium 环境包（可 pip install -e）
 │       ├── grid_world_env/
@@ -53,9 +52,9 @@ rl_gym/
 
 | 情况 | 奖励 | 位置变化 |
 |---|---|---|
-| 走到 `target` | `+1` | 进入目标格 |
-| 走出边界 / 撞上 `forbidden` | `-1` | 留在原地（回退该动作） |
-| 其他 | `0` | 正常移动 |
+| 走到 `target` | `r_target` | 进入目标格 |
+| 走出边界 / 撞上 `forbidden` | `r_boundary/r_fobidden` | 留在原地（回退该动作） |
+| 其他 | `r_other` | 正常移动 |
 
 `step()` 固定返回 `(obs, reward, False, False, info)`：**目标格不是吸收态**，到达后继续 `stay` 会不断拿到 `+1`（因此 `v(target) = 1/(1-γ)`）。需要 `TimeLimit` 或自行判停。
 
@@ -151,14 +150,14 @@ env.set_v(None)             # 清除价值叠加
 |---|---|
 | `value_iteration()` | 对每个状态取 `argmax_a q(s, a)`，取使`q(s, a)`最大的动作为新策略, 取最大`q(s, a)`为`v_new(s)`，直到 `max_s(v_new(s) − v_old(s))< theta` |
 
-### Monte Carlo Exploring Starts
+### Monte Carlo Exploring Starts ✅
 
 | 方法 | 说明 |
 |---|---|
 | `_generate_epsilon()` | 随机取`s0,a0` 产生一个新的 `epsilon` |
 | `_update(epsilon)` | 使用获得到的`epsilon`来更新`action value`和 `pi`|
 
-### Monte Carlo EpsilonGreedy
+### Monte Carlo EpsilonGreedy ✅
 
 | 方法 | 说明 |
 |---|---|
