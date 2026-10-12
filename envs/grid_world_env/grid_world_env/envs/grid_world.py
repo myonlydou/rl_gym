@@ -22,10 +22,19 @@ class GridWorldEnv(gym.Env):
         start_cell=None,
         target_cell=None,
         forbidden_cells=None,
+        r_target=0,
+        r_forbidden=-10,
+        r_boundary=-10,
+        r_other=-1,
         render_mode=None,
     ):
         self.size = size  # The size of the square grid
         self.window_size = 512  # The size of the PyGame window
+
+        self.r_target = r_target
+        self.r_forbidden = r_forbidden
+        self.r_boundary = r_boundary
+        self.r_other = r_other
 
         self._fixed_target_location = (
             np.array(target_cell, dtype=int) if target_cell is not None else None
@@ -200,16 +209,16 @@ class GridWorldEnv(gym.Env):
         self._agent_location = self._agent_location + direction
 
         if np.array_equal(self._agent_location, self._target_location):
-            reward = 1
+            reward = self.r_target
             terminated = True
-        elif (
-            self._is_out_of_boundary(self._agent_location)
-            or tuple(self._agent_location) in self._forbidden_locations
-        ):
-            reward = -1
+        elif self._is_out_of_boundary(self._agent_location):
+            reward = self.r_boundary
+            self._agent_location = self._agent_location - direction
+        elif tuple(self._agent_location) in self._forbidden_locations:
+            reward = self.r_forbidden
             self._agent_location = self._agent_location - direction
         else:
-            reward = 0
+            reward = self.r_other
 
         observation = self._get_obs()
         info = self._get_info()
@@ -618,16 +627,16 @@ class GridWorldEnv(gym.Env):
                 direction = self._action_to_direction[action]
                 nx, ny = x + direction[0], y + direction[1]
 
-                if (
-                    self._is_out_of_boundary((nx, ny))
-                    or (nx, ny) in self._forbidden_locations
-                ):
+                if self._is_out_of_boundary((nx, ny)):
                     nx, ny = x, y
-                    reward = -1
+                    reward = self.r_boundary
+                elif (nx, ny) in self._forbidden_locations:
+                    nx, ny = x, y
+                    reward = self.r_forbidden
                 elif (nx, ny) == tuple(self._target_location):
-                    reward = 1
+                    reward = self.r_target
                 else:
-                    reward = 0
+                    reward = self.r_other
 
                 state_id = states_idx[(x, y)]
                 n_state_id = states_idx[(nx, ny)]
