@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
     # 把策略交给环境：render_mode="human" 时每格画出箭头/圆点，
     # 当前 agent 所在格的动作用红色高亮，跑 episode 时能直接看出它按策略在走
-    base_env.set_policy(pi, show_ties=True)
+    base_env.set_policy(pi)
     base_env.set_v(v)
 
     episode_over = False

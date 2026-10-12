@@ -2,6 +2,7 @@ from enum import Enum
 import gymnasium as gym
 from gymnasium import spaces
 import pygame
+import pygame.gfxdraw
 import numpy as np
 
 
@@ -111,10 +112,11 @@ class GridWorldEnv(gym.Env):
         （箭头 = 动作方向，圆点 = stay），当前 agent 所在格的动作用高亮色叠在 agent 上。
         """
         self._policy_probs = None  # (size, size, n_actions) 概率，None 表示不叠加
-        self._policy_show_ties = False
+        self._policy_show_ties = True
         self._policy_tie_tol = 1e-8
-        self.policy_arrow_scale = 0.34  # 箭头长度（单位：格）
-        self.policy_stay_radius = 0.14  # stay 圆点半径（单位：格）
+        self.policy_arrow_scale = 0.34  # 概率为 1 时的箭头长度（单位：格）
+        self.policy_stay_radius = 0.14  # 概率为 1 时的 stay 圆点半径（单位：格）
+        self.policy_min_scale = 0.3  # 概率为 0 时的保底长度比例（避免小概率看不见）
         self.policy_color = (40, 40, 40)  # 策略本身的颜色
         self.policy_current_color = (220, 40, 40)  # 当前状态所选动作的高亮色
 
@@ -289,12 +291,17 @@ class GridWorldEnv(gym.Env):
         probs[xs, ys, idx] = 1.0
         return probs
 
-    def set_policy(self, policy, *, show_ties=False, tie_tol=1e-8):
+    def set_policy(self, policy, *, show_ties=True, tie_tol=1e-8):
         """设置要在渲染里叠加显示的策略；传 ``None`` 表示清除。
 
-        ``render_mode="human"``（或 ``"rgb_array"``）时，每格画出该状态的最优动作：
-        **箭头 = 动作方向，圆点 = stay**；agent 所在格的动作用 ``policy_current_color``
-        （默认红色）高亮叠在 agent 上，这样能直接看到 agent 每一步实际执行的动作。
+        ``render_mode="human"``（或 ``"rgb_array"``）时，每格画出策略：
+        **箭头 = 动作方向，圆点 = stay**，**长度/半径 = 该动作的概率**
+        （线性映射到 ``[policy_min_scale, 1]``，小概率保底可见，不会消失）；
+        agent 所在格的动作用 ``policy_current_color``（默认红色）高亮叠在 agent 上，
+        这样能直接看到 agent 每一步实际执行的动作。
+
+        ``show_ties`` 默认 ``True``：概率大于 ``tie_tol`` 的动作都画出来，
+        因此 ε-greedy / 并列最优这种"软"策略能一眼看出每个动作的权重。
 
         ``policy`` 的形状见 :meth:`_policy_to_action_probs`，
         ``PolicyIteration.policy_iteration()`` 返回的 ``pi`` 可直接传入。
@@ -345,8 +352,9 @@ class GridWorldEnv(gym.Env):
     def _policy_cell_actions(self, x, y):
         """算出 ``(x, y)`` 这格要画的动作。
 
-        返回 ``(actions, spread_axis, offsets, length_factor, radius_factor)``：
-        ``spread_axis`` / ``offsets`` 用于把并列最优的多个动作并排错开。
+        返回 ``(actions, scales)``：``scales`` 与 ``actions`` 一一对应，是长度/半径的
+        缩放系数（= 该动作的概率线性映射到 ``[policy_min_scale, 1]``）。
+        所有动作都从格子中心向外画，方向不同天然不会重叠，不需要再错开。
         """
 
         probs = self._policy_probs
@@ -360,58 +368,57 @@ class GridWorldEnv(gym.Env):
         else:
             actions = np.array([int(np.argmax(probs[x, y]))])
 
-        if actions.size > 1:
-            # 并列最优：沿“第一个动作”的法向并排错开（统一错开轴，反向并列也不会重叠）
-            first_direction = np.asarray(
-                self._action_to_direction[int(actions[0])], dtype=float
-            )
-            spread_axis = np.array([-first_direction[1], first_direction[0]])
-            if not np.any(spread_axis):  # 第一个动作是 stay，退化成水平错开
-                spread_axis = np.array([1.0, 0.0])
+        # 长度表示概率：p=1 满长，p=0 也保留 policy_min_scale 的保底长度
+        strengths = np.clip(probs[x, y][actions], 0.0, 1.0)
+        scales = self.policy_min_scale + (1 - self.policy_min_scale) * strengths
 
-            crowded = actions.size > 2  # 三个以上动作时缩小符号、加大间距
-            spread = 0.3 if crowded else 0.2
-            offsets = np.linspace(-spread, spread, actions.size)
-            length_factor = 0.5 if crowded else 0.7
-            radius_factor = 0.6 if crowded else 1.0
-        else:
-            spread_axis = np.zeros(2)
-            offsets = np.zeros(1)
-            length_factor = 1.0
-            radius_factor = 1.0
-
-        return actions, spread_axis, offsets, length_factor, radius_factor
+        return actions, scales
 
     @staticmethod
-    def _draw_arrow(canvas, start, end, color, line_width, head_width, head_length):
-        """在 pygame 画布上画一根带三角箭头的线段。"""
+    def _draw_arrow(canvas, start, end, color, shaft_width, head_width, head_length):
+        """画一根从 ``start`` 指向 ``end`` 的箭头。
+
+        杆和头合成**一个多边形**再统一取整，所以左右严格对称（以前分开画线+三角，
+        取整误差会让箭头一边多一个像素、看起来歪）；边缘再用 gfxdraw 抗锯齿。
+        """
         start = np.asarray(start, dtype=float)
         end = np.asarray(end, dtype=float)
         vector = end - start
         norm = float(np.linalg.norm(vector))
-        if norm == 0:
+        if norm < 1e-6:
             return
 
         unit = vector / norm
         normal = np.array([-unit[1], unit[0]])
-        head_base = end - unit * min(head_length, norm * 0.6)
 
-        pygame.draw.line(
-            canvas,
-            color,
-            (int(round(start[0])), int(round(start[1]))),
-            (int(round(head_base[0])), int(round(head_base[1]))),
-            width=line_width,
-        )
-        pygame.draw.polygon(
-            canvas,
-            color,
-            [
-                (int(round(end[0])), int(round(end[1]))),
-                tuple(int(v) for v in np.round(head_base + normal * head_width / 2)),
-                tuple(int(v) for v in np.round(head_base - normal * head_width / 2)),
-            ],
-        )
+        # 短箭头按比例缩头，避免“头比杆还长”
+        head_len = min(head_length, norm * 0.6)
+        half_shaft = shaft_width / 2
+        half_head = max(half_shaft, head_width / 2)
+        head_base = end - unit * head_len
+
+        points = [
+            start + normal * half_shaft,
+            head_base + normal * half_shaft,
+            head_base + normal * half_head,
+            end,
+            head_base - normal * half_head,
+            head_base - normal * half_shaft,
+            start - normal * half_shaft,
+        ]
+        int_points = [(int(round(p[0])), int(round(p[1]))) for p in points]
+
+        if len(set(int_points)) < 3:  # 格子太小时多边形会退化成几个重合点
+            pygame.draw.circle(
+                canvas,
+                color,
+                int_points[3],
+                max(1, int(round(shaft_width))),
+            )
+            return
+
+        pygame.draw.polygon(canvas, color, int_points)
+        pygame.gfxdraw.aapolygon(canvas, int_points, color)
 
     def _draw_values(self, canvas, pix_square_size, cells=None, background=False):
         """把 ``set_v()`` 设好的 ``V(s)`` 写在每格左上角。
@@ -472,46 +479,47 @@ class GridWorldEnv(gym.Env):
                 if (x, y) not in self._forbidden_locations
             ]
 
-        line_width = max(1, int(round(pix_square_size * 0.045)))
-        head_width = pix_square_size * 0.18
-        head_length = pix_square_size * 0.15
+        shaft_width = max(1.0, pix_square_size * 0.028)  # 杆宽（p=1 时）
+        head_width = pix_square_size * 0.10  # 箭头宽（约为杆宽的 3.5 倍）
+        head_length = pix_square_size * 0.11
 
         for x, y in cells:
             screen_x, screen_y = self._cell_to_screen((x, y), pix_square_size)
             base_center = np.array(
                 [screen_x + pix_square_size / 2, screen_y + pix_square_size / 2]
             )
-            actions, spread_axis, offsets, length_factor, radius_factor = (
-                self._policy_cell_actions(x, y)
-            )
-            length = pix_square_size * self.policy_arrow_scale * length_factor
-            radius = pix_square_size * self.policy_stay_radius * radius_factor
+            actions, scales = self._policy_cell_actions(x, y)
 
-            for action, offset in zip(actions, offsets):
-                # 逻辑坐标 -> 屏幕坐标：y 轴要翻转
-                center = (
-                    base_center
-                    + np.array([spread_axis[0] * offset, -spread_axis[1] * offset])
-                    * pix_square_size
-                )
+            for action, scale in zip(actions, scales):
+                center = base_center
                 direction = np.asarray(
                     self._action_to_direction[int(action)], dtype=float
                 )
+                # 长度（圆点半径）和线宽/箭头都按概率缩放
+                length = pix_square_size * self.policy_arrow_scale * scale
+                radius = pix_square_size * self.policy_stay_radius * scale
 
                 if not np.any(direction):  # stay -> 圆点
                     pygame.draw.circle(
                         canvas,
                         color,
                         (int(round(center[0])), int(round(center[1]))),
-                        int(round(radius)),
+                        max(1, int(round(radius))),
                     )
                     continue
 
+                # 箭头一律从格子中心出发，朝该动作的方向向外指
                 screen_direction = np.array([direction[0], -direction[1]])
-                start = center - screen_direction * length / 2
-                end = center + screen_direction * length / 2
+                start = center
+                end = center + screen_direction * length
                 self._draw_arrow(
-                    canvas, start, end, color, line_width, head_width, head_length
+                    canvas,
+                    start,
+                    end,
+                    color,
+                    shaft_width * scale,
+                    head_width * scale,
+                    head_length * scale,
                 )
 
     def _render_frame(self):

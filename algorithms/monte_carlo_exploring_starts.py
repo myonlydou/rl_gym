@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
     _, _, cells, states_idx = base_env.build_mdp()
 
-    base_env.set_policy(pi, show_ties=True)
+    base_env.set_policy(pi)
 
     while not episode_over:
         s = states_idx[tuple(base_env._agent_location)]

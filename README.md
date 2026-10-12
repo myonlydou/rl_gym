@@ -102,14 +102,15 @@ while not episode_over:                         # 实跑时能看着策略走
 
 | 画面元素 | 含义 |
 |---|---|
-| 箭头 | 该状态的策略动作（`right` / `up` / `left` / `down`） |
-| 圆点 | 该状态的策略动作是 `stay` |
+| 箭头 | 该状态的策略动作（`right` / `up` / `left` / `down`），**从格子中心向外指**（多个动作就是同一个中心射出的几根箭头） |
+| 圆点 | 该状态的策略动作是 `stay`，画在格子中心 |
+| **箭头长度 / 圆点半径** | **该动作的概率 `π(a\|s)`**（`p=1` 满长，`p=0` 保留 `policy_min_scale` 的保底长度，概率小的动作不会消失） |
 | 青色 /橙色 | `target` / `forbidden`（禁区格不画策略，因为实际交互中永远走不到） |
 
 - `set_policy(policy)` 的 `policy` 接受 `(n_states, n_actions)` 概率（`pi` 直接可传）、`(n_states,)` / `(size, size)` 动作编号、`(size, size, n_actions)` 概率；`set_policy(None)` 清除叠加。
-- 默认每格只画 `argmax_a pi(a|s)`；`set_policy(pi, show_ties=True)` 会把并列最优的多个动作并排错开画出（`left`+`right` 这种反向并列也不会重叠）。
+- **`show_ties` 默认 `True`**：概率大于 `tie_tol`（默认 `1e-8`）的动作全部画出，所以 ε-greedy（如 `[0.84, 0.04, 0.04, 0.04, 0.04]` 就是"一根长箭头 + 四根小短箭头 + 一个小圆点"）和并列最优都能一眼看出权重。想看每格只留一个 `argmax` 就传 `set_policy(pi, show_ties=False)`——此时箭头长度仍表示该动作的概率。
 - 不调用 `set_policy()` 时，渲染与原来完全一致（只有 agent / target / forbidden），不会有任何额外开销。
-- 外观可调：`env.policy_arrow_scale`（箭头长度，单位格）、`env.policy_stay_radius`、`env.policy_color`、`env.policy_current_color`；播放速度由 `metadata["render_fps"]` 控制。
+- 外观可调：`env.policy_arrow_scale`（`p=1` 时的箭头长度，单位格）、`env.policy_stay_radius`（`p=1` 时的圆点半径）、`env.policy_min_scale`（`p=0` 时的保底长度比例，默认 `0.3`）、`env.policy_color`、`env.policy_current_color`；播放速度由 `metadata["render_fps"]` 控制。
 - 策略是**针对某张地图**（目标格 + 禁区）算出来的：如果重新 `reset()` 换了目标格，需要重新算 `pi` 再 `set_policy()`。
 
 ### 在渲染里直接看价值：`set_v()`
