@@ -30,14 +30,18 @@ class Sarsa:
 
     def _policy_update(self, s):
         max_qsa = max(self.qsa[s])
-        n_max_qsa = self.qsa[s].count(max_qsa)
 
-        pi_a = (
-            1 - self.epsilon + n_max_qsa / self.n_actions * self.epsilon
-        ) / n_max_qsa
-        pi_other = self.epsilon / self.n_actions
+        pi_a = 1 - (self.n_actions - 1) / self.n_actions * self.epsilon
+        pi_other = 1 / self.n_actions * self.epsilon
 
-        self.pi[s] = [pi_a if qsa == max_qsa else pi_other for qsa in self.qsa[s]]
+        found = False
+        for i, qsa in enumerate(self.qsa[s]):
+
+            if qsa == max_qsa and not found:
+                found = True
+                self.pi[s][i] = pi_a
+            else:
+                self.pi[s][i] = pi_other
 
     def _sample_action(self, s):
         return self.rng.choice(self.n_actions, p=self.pi[s])
@@ -97,7 +101,7 @@ if __name__ == "__main__":
     seed = int(10000 * random.random())
     size = 5
     max_episode_steps = 500
-    iterate_steps = 25000
+    iterate_steps = 1000
 
     start_location = (0, 0)
     target_location = (2, 1)
@@ -117,7 +121,7 @@ if __name__ == "__main__":
 
     base_env: GridWorldEnv = env.unwrapped  # type: ignore
 
-    it = Sarsa(env, alpha=0.001, epsilon=0.1, gamma=0.9, seed=seed)
+    it = Sarsa(env, alpha=0.05, epsilon=0.1, gamma=0.9, seed=seed)
 
     rewards = []
     episode_lengths = []
@@ -128,7 +132,7 @@ if __name__ == "__main__":
         episode_lengths.append(episode_length)
         rewards.append(reward)
 
-        if cnt % 1000 == 0:
+        if cnt % 100 == 0:
             print(f"sarsa iterate {cnt}'th...")
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
