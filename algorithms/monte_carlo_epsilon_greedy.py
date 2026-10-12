@@ -19,21 +19,9 @@ class MonteCarloEpsilonGreedy(MonteCarloExploringStarts):
 
         self.epsilon = epsilon
 
-    def _update(self, episode):
-        g = 0.0
-        visited_sa = set()
-        # 回报要从后往前累加：G_t = r_{t+1} + gamma * G_{t+1}
-        for i in reversed(range(len(episode))):
-            s, a, r = episode[i]
-
-            g = r + self.gamma * g
-
-            if not self.first_visit or (s, a) not in visited_sa:
-                visited_sa.add((s, a))
-                self.n_visit_sa[s][a] += 1
-                self.qsa[s][a] += (g - self.qsa[s][a]) / self.n_visit_sa[s][a]
-
-        for s, a in visited_sa:
+    def _improve_policy(self, visited_sa):
+        for sa in visited_sa:
+            s = sa[0]
             max_qsa = max(self.qsa[s])
             pi_a = 1 - (self.n_actions - 1) / self.n_actions * self.epsilon
             pi_other = 1 / self.n_actions * self.epsilon
@@ -45,8 +33,6 @@ class MonteCarloEpsilonGreedy(MonteCarloExploringStarts):
                     self.pi[s][i] = pi_a
                 else:
                     self.pi[s][i] = pi_other
-
-        return self.pi
 
 
 if __name__ == "__main__":
@@ -80,7 +66,7 @@ if __name__ == "__main__":
         if cnt % 1000 == 0:
             print(f"monte carlo update {cnt}'th")
 
-    print(f"monte carlo update 10000'th, stable{stable}'th...")
+    print(f"monte carlo update {iterate_steps}'th, stable{stable}'th...")
     pi = it.pi
 
     env.close()

@@ -71,6 +71,13 @@ class MonteCarloExploringStarts:
 
         return episode
 
+    def _improve_policy(self, visited_sa):
+        for sa in visited_sa:
+            s = sa[0]
+            max_qsa = max(self.qsa[s])
+            n_max_qsa = self.qsa[s].count(max_qsa)
+            self.pi[s] = [1 / n_max_qsa if qsa == max_qsa else 0 for qsa in self.qsa[s]]
+
     def _update(self, episode):
         g = 0.0
         visited_sa = set()
@@ -85,10 +92,7 @@ class MonteCarloExploringStarts:
                 self.n_visit_sa[s][a] += 1
                 self.qsa[s][a] += (g - self.qsa[s][a]) / self.n_visit_sa[s][a]
 
-        for s, a in visited_sa:
-            max_qsa = max(self.qsa[s])
-            n_max_qsa = self.qsa[s].count(max_qsa)
-            self.pi[s] = [1 / n_max_qsa if qsa == max_qsa else 0 for qsa in self.qsa[s]]
+            self._improve_policy(visited_sa)
 
         return self.pi
 
@@ -129,7 +133,7 @@ if __name__ == "__main__":
         if cnt % 1000 == 0:
             print(f"monte carlo update {cnt}'th")
 
-    print(f"monte carlo update 10000'th, stable{stable}'th...")
+    print(f"monte carlo update {iterate_steps}'th, stable{stable}'th...")
     pi = it.pi
 
     env.close()
