@@ -104,23 +104,32 @@ if __name__ == "__main__":
     import random
 
     seed = int(10000 * random.random())
+    size = 5
+    max_episode_steps = 100
+    iterate_steps = 10000
 
-    env = TimeLimit(GridWorldEnv(render_mode=None, size=5), max_episode_steps=100)
+    env = TimeLimit(
+        GridWorldEnv(render_mode=None, size=size), max_episode_steps=max_episode_steps
+    )
 
     base_env: GridWorldEnv = env.unwrapped  # type: ignore
 
     env.reset(seed=seed)
 
-    it = MonteCarloExploringStarts(env, 0.9, seed=seed)
+    it = MonteCarloExploringStarts(env, 0.9, seed=seed, first_visit=True)
 
     # MC 的样本是随机的，"π 连续若干局不变"并不代表收敛
     # （实测 2000~5000 局时出现过上千局的稳定 streak，但策略还没到最优），
     # 所以直接跑固定局数；size=10 这种状态空间要再放大（5e4 起）
-    for cnt in range(10000):
+    stable = 0
+    for cnt in range(iterate_steps):
+        old = [row[:] for row in it.pi]
         it.monte_carlo_update()
+        stable = stable + 1 if it.pi == old else 0
         if cnt % 1000 == 0:
-            print(f"monte carlo update {cnt}'th...")
+            print(f"monte carlo update {cnt}'th")
 
+    print(f"monte carlo update 10000'th, stable{stable}'th...")
     pi = it.pi
 
     env.close()
@@ -130,7 +139,10 @@ if __name__ == "__main__":
     episode_over = False
     total_reward = 0.0
 
-    env = TimeLimit(GridWorldEnv(render_mode="human", size=5), max_episode_steps=100)
+    env = TimeLimit(
+        GridWorldEnv(render_mode="human", size=size),
+        max_episode_steps=max_episode_steps,
+    )
 
     base_env: GridWorldEnv = env.unwrapped  # type: ignore
 
