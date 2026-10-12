@@ -12,8 +12,11 @@
 ```
 rl_gym/
 ├── algorithms/
+│   ├── monte_carlo_epsilon_greedy.py
+│   ├── monte_carlo_exploring_starts.py
 │   ├── policy_iteration.py      # 策略迭代（策略评估 + 策略改进）
 │   └── value_iteration.py       # 值迭代
+
 ├── envs/
 │   └── grid_world_env/          # 自定义 Gymnasium 环境包（可 pip install -e）
 │       ├── grid_world_env/
@@ -135,11 +138,6 @@ env.set_v(None)             # 清除价值叠加
 
 ### Policy Iteration（`algorithms/policy_iteration.py`）✅
 
-```python
-it = PolicyIteration(P, R, theta=0.001, gamma=0.9)
-pi = it.policy_iteration()
-```
-
 | 方法 | 说明 |
 |---|---|
 | `_policy_evaluation()` | 迭代策略评估。同步（Jacobi）更新：`next_v` 与 `self.v` 分开，一轮扫完再整体写回；用 sup-norm 判停 `max_s(v_new(s) − v_old(s))< theta`|
@@ -148,15 +146,23 @@ pi = it.policy_iteration()
 
 ### Value Iteration（`algorithms/value_iteration.py`）✅
 
-```python
-it = ValueIteration(P, R, theta=0.001, gamma=0.9)
-pi = it.value_iteration()
-```
-
 | 方法 | 说明 |
 |---|---|
 | `value_iteration()` | 对每个状态取 `argmax_a q(s, a)`，取使`q(s, a)`最大的动作为新策略, 取最大`q(s, a)`为`v_new(s)`，直到 `max_s(v_new(s) − v_old(s))< theta` |
 
+### Monte Carlo Exploring Starts
+
+| 方法 | 说明 |
+|---|---|
+| `_generate_epsilon()` | 随机取`s0,a0` 产生一个新的 `epsilon` |
+| `_update(epsilon)` | 使用获得到的`epsilon`来更新`action value`和 `pi`|
+
+### Monte Carlo EpsilonGreedy
+
+| 方法 | 说明 |
+|---|---|
+| `_generate_epsilon()` | 随机取`s0,a0` 产生一个新的 `epsilon` |
+| `_update(epsilon)` | 使用获得到的`epsilon`来更新`action value`和 `pi`|
 
 ---
 
@@ -176,7 +182,9 @@ pip install -e envs/grid_world_env
 
 ```bash
 python algorithms/policy_iteration.py   # 策略迭代 
-python algorithms/value_iteration.py    # 价值迭代 
+python algorithms/value_iteration.py    # 价值迭代
+python algorithms/monte_carlo_exploring_starts.py  
+python algorithms/monte_carlo_epsilon_greedy.py # MC
 ```
 ---
 
@@ -193,6 +201,6 @@ python algorithms/value_iteration.py    # 价值迭代
 - [x] 带 forbidden cell 的 `GridWorldEnv`
 - [x] 策略迭代（Policy Iteration）
 - [x] 值迭代（Value Iteration）
-- [ ] 蒙特卡洛方法（MC Prediction / MC Control）
+- [x] 蒙特卡洛方法（MC Exploring Starts / MC Epsilon Greedy）
 - [ ] 时序差分：Sarsa、Q-learning、Expected Sarsa
 - [ ] 值函数近似 / 策略梯度（Actor-Critic）
