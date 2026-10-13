@@ -63,7 +63,7 @@ class Sarsa:
             s0 = self._agent_state(obs)
             a0 = self._sample_action(s0)
 
-            obs, r, terminated, truncated, info = self.base_env.step(a0)
+            obs, r, terminated, truncated, info = self.env.step(a0)
 
             s1 = self._agent_state(obs)
             a1 = self._sample_action(s1)
