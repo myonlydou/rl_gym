@@ -23,9 +23,12 @@ class Sarsa:
 
         self.rng = np.random.default_rng(seed)
 
-    def _action_value_update(self, s0, a0, r, s1, a1):
+    def _action_value_update(self, s0, a0, r, s1, a1, terminated):
+        next_qsa = 0
+        if not terminated:
+            next_qsa = self.qsa[s1][a1]
         self.qsa[s0][a0] = self.qsa[s0][a0] - self.alpha * (
-            self.qsa[s0][a0] - r - self.gamma * self.qsa[s1][a1]
+            self.qsa[s0][a0] - r - self.gamma * next_qsa
         )
 
     def _policy_update(self, s):
@@ -65,7 +68,7 @@ class Sarsa:
             s1 = self._agent_state(obs)
             a1 = self._sample_action(s1)
 
-            self._action_value_update(s0, a0, r, s1, a1)
+            self._action_value_update(s0, a0, r, s1, a1, terminated)
             self._policy_update(s0)
 
             cnt += 1

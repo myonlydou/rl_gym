@@ -5,16 +5,40 @@ from gymnasium.wrappers import TimeLimit
 
 
 class ExpectedSarsa(Sarsa):
-    def __init__(self, env, alpha, gamma, epsilon, seed) -> None:
-        super().__init__(env, alpha, gamma, epsilon, seed)
-
-    def _action_value_update(self, s0, a0, r, s1, a1):
+    def _action_value_update(self, s0, a0, r, s1, a1, terminated):
         E = 0
-        for a, p in enumerate(self.pi[s1]):
-            E += p * self.qsa[s1][a]
+        if not terminated:
+            for a, p in enumerate(self.pi[s1]):
+                E += p * self.qsa[s1][a]
+
         self.qsa[s0][a0] = self.qsa[s0][a0] - self.alpha * (
             self.qsa[s0][a0] - r - self.gamma * E
         )
+
+    def sarsa_iteration(self):
+        obs, info = self.env.reset(seed=self.seed)
+        episode_over = False
+
+        cnt = 0
+        total_reward = 0
+        while not episode_over:
+            s0 = self._agent_state(obs)
+            a0 = self._sample_action(s0)
+
+            obs, r, terminated, truncated, info = self.base_env.step(a0)
+
+            s1 = self._agent_state(obs)
+            a1 = 0
+
+            self._action_value_update(s0, a0, r, s1, a1, terminated)
+            self._policy_update(s0)
+
+            cnt += 1
+            total_reward += r
+
+            episode_over = terminated or truncated
+
+        return cnt, total_reward
 
 
 def smooth(data, window=50):
