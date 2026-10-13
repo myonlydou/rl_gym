@@ -50,7 +50,7 @@ class Sarsa:
         return obs["agent"][0] * self.base_env.size + obs["agent"][1]
 
     def sarsa_iteration(self):
-        obs, info = env.reset(seed=self.seed)
+        obs, info = self.env.reset(seed=self.seed)
         episode_over = False
 
         cnt = 0
@@ -60,7 +60,7 @@ class Sarsa:
             s0 = self._agent_state(obs)
             a0 = self._sample_action(s0)
 
-            obs, r, terminated, truncated, info = base_env.step(a0)
+            obs, r, terminated, truncated, info = self.base_env.step(a0)
 
             s1 = self._agent_state(obs)
             a1 = self._sample_action(s1)
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     seed = int(10000 * random.random())
     size = 5
     max_episode_steps = 500
-    iterate_steps = 1000
+    iterate_steps = 500
 
     start_location = (0, 0)
     target_location = (2, 1)
@@ -121,7 +121,7 @@ if __name__ == "__main__":
 
     base_env: GridWorldEnv = env.unwrapped  # type: ignore
 
-    it = Sarsa(env, alpha=0.05, epsilon=0.1, gamma=0.9, seed=seed)
+    it = Sarsa(env, alpha=0.1, epsilon=0.1, gamma=0.9, seed=seed)
 
     rewards = []
     episode_lengths = []
