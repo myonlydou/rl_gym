@@ -41,7 +41,6 @@ class NStepSarsa(Sarsa):
             s1 = s0
             a1 = a0
 
-            next_obs = obs
             for i in range(self.n):
                 cnt += 1
 
