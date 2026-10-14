@@ -17,7 +17,6 @@ class ValueFunctionApproximation:
         self.pi = np.full((self.n_states, self.n_actions), 1 / self.n_actions)
 
         self.omega = np.zeros(len(self._phi_t(0)))
-        print()
 
         self.gamma = gamma
         self.alpha = alpha
@@ -39,7 +38,7 @@ class ValueFunctionApproximation:
     def _phi_t(self, s):
         x, y = self.state2normalized_position(s)
 
-        return np.asarray([1, x, y, x**2, y**2, x * y, x**3, y**3, x**2 * y, y**2 * x])
+        return np.asarray([1, x, y])
 
     def _state_value(self, s):
         return float(self._phi_t(s) @ self.omega)
