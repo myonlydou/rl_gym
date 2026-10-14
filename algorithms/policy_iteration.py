@@ -66,13 +66,29 @@ if __name__ == "__main__":
     import numpy as np
     import time
 
-    env = TimeLimit(GridWorldEnv(render_mode="human", size=5), max_episode_steps=40)
+    size = 5
+    max_episode_steps = 100
+    start_location = (0, 0)
+    target_location = (2, 1)
+
+    forbidden_locations = [(1, 0), (1, 1), (2, 2), (2, 3), (3, 1), (3, 0)]
+
+    env = TimeLimit(
+        GridWorldEnv(
+            size,
+            start_cell=start_location,
+            target_cell=target_location,
+            forbidden_cells=forbidden_locations,
+            render_mode="human",
+        ),
+        max_episode_steps=max_episode_steps,
+    )
 
     base_env: GridWorldEnv = env.unwrapped  # type: ignore
 
     env.reset()
 
-    P, R, cells, states_idx = base_env.build_mdp()
+    P, R, _, cells, states_idx = base_env.build_mdp()
 
     it = PolicyIteration(P, R, 0.001, 0.9)
 

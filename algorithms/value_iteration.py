@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     env.reset()
 
-    P, R, cells, states_idx = base_env.build_mdp()
+    P, R, _, cells, states_idx = base_env.build_mdp()
 
     it = ValueIteration(P, R, 0.001, 0.9)
 

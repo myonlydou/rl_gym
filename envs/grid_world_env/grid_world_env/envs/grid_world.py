@@ -218,7 +218,6 @@ class GridWorldEnv(gym.Env):
             self._agent_location = self._agent_location - direction
         elif tuple(self._agent_location) in self._forbidden_locations:
             reward = self.r_forbidden
-            self._agent_location = self._agent_location - direction
         else:
             reward = self.r_other
 
@@ -438,12 +437,7 @@ class GridWorldEnv(gym.Env):
             self._v_font_size = font_size
 
         if cells is None:
-            cells = [
-                (x, y)
-                for x in range(self.size)
-                for y in range(self.size)
-                if (x, y) not in self._forbidden_locations
-            ]
+            cells = [(x, y) for x in range(self.size) for y in range(self.size)]
 
         for x, y in cells:
             text = self._v_font.render(
@@ -472,12 +466,7 @@ class GridWorldEnv(gym.Env):
 
         color = self.policy_color if color is None else color
         if cells is None:
-            cells = [
-                (x, y)
-                for x in range(self.size)
-                for y in range(self.size)
-                if (x, y) not in self._forbidden_locations
-            ]
+            cells = [(x, y) for x in range(self.size) for y in range(self.size)]
 
         shaft_width = max(1.0, pix_square_size * 0.028)  # 杆宽（p=1 时）
         head_width = pix_square_size * 0.10  # 箭头宽（约为杆宽的 3.5 倍）
@@ -621,17 +610,21 @@ class GridWorldEnv(gym.Env):
             )
 
     def build_mdp(self):
-        cells = [(x, y) for x in range(self.size) for y in range(self.size)]
-        states_idx = {cell: i for i, cell in enumerate(cells)}
+        cells = np.asarray(
+            [(x, y) for x in range(self.size) for y in range(self.size)], dtype=int
+        )
+        states_idx = {(cx, cy): i for i, (cx, cy) in enumerate(cells)}
 
         n_states = self.size**2
         n_actions = self.action_space.n  # type: ignore
 
         P = np.zeros((n_states, n_actions, n_states))
         R = np.zeros((n_states, n_actions, n_states))
+        terminal = np.zeros((n_states, n_actions), dtype=bool)
 
         for x, y in cells:
             for action in range(n_actions):
+                term = False
                 direction = self._action_to_direction[action]
                 nx, ny = x + direction[0], y + direction[1]
 
@@ -639,10 +632,10 @@ class GridWorldEnv(gym.Env):
                     nx, ny = x, y
                     reward = self.r_boundary
                 elif (nx, ny) in self._forbidden_locations:
-                    nx, ny = x, y
                     reward = self.r_forbidden
                 elif (nx, ny) == tuple(self._target_location):
                     reward = self.r_target
+                    term = True
                 else:
                     reward = self.r_other
 
@@ -650,8 +643,9 @@ class GridWorldEnv(gym.Env):
                 n_state_id = states_idx[(nx, ny)]
                 P[state_id, action, n_state_id] = 1.0
                 R[state_id, action, n_state_id] = reward
+                terminal[state_id, action] = term
 
-        return P, R, cells, states_idx
+        return P, R, terminal, cells, states_idx
 
     def close(self):
         if self.window is not None:
