@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
     env.reset(seed=seed)
 
-    _, _, cells, states_idx = base_env.build_mdp()
+    _, _, _, cells, states_idx = base_env.build_mdp()
 
     base_env.set_policy(pi)
 

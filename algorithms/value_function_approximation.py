@@ -4,7 +4,6 @@ import numpy as np
 
 
 class ValueFunctionApproximation:
-    """线性近似的策略评估：V(s) = ω·φ(s)，用 TD(0) 半梯度更新 ω。"""
 
     def __init__(self, env, gamma, alpha, seed=None) -> None:
         self.env = env
@@ -26,7 +25,7 @@ class ValueFunctionApproximation:
 
         self.rng = np.random.default_rng(seed=seed)
 
-    def state2normalized_position(self, s):
+    def _state2normalized_position(self, s):
         """返回 归一化 位置"""
 
         size = self.size
@@ -36,7 +35,7 @@ class ValueFunctionApproximation:
         return x, y
 
     def _phi_t(self, s):
-        x, y = self.state2normalized_position(s)
+        x, y = self._state2normalized_position(s)
 
         return np.asarray([1, x, y])
 
