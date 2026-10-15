@@ -95,14 +95,13 @@ class SarsaWithFunctionApproximation:
         while not episode_over:
             next_obs, r, terminated, truncated, _ = env.step(a)
 
-            next_a = self._sample_action(next_obs)
+            next_a = self._sample_action(next_obs, True)
 
             a = next_a
 
             steps += 1
             total_reward += r
 
-            print(f"{steps}'th, reward: {r}, total:{total_reward}...")
             episode_over = terminated or truncated
 
         return steps, total_reward
@@ -130,14 +129,16 @@ if __name__ == "__main__":
             print(
                 f"第 {ep+1} 局, epsilon={it.epsilon:.3f}, average|rewards|={np.average(rewards):.2f}"
             )
+            rewards.clear()
 
-    it.epsilon = 0.0  # 贪心评估
-    scores = [it.iteration()[1] for _ in range(20)]
+    scores = [it.run_episode(env)[1] for _ in range(20)]
     print(f"贪心评估: {np.mean(scores):.1f} ± {np.std(scores):.1f}")
 
     env.close()
     env = gym.make("CartPole-v1", render_mode="human")
 
-    it.run_episode(env)
+    _, total_reward = it.run_episode(env)
+
+    print(f"total_reward:{total_reward}...")
 
     env.close()
