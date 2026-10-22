@@ -40,14 +40,6 @@ class SarsaWithFunctionApproximation:
     def _action_values(self, obs):
         return self._phi_t(obs) @ self.omega
 
-    def _pi_probs(self, obs):
-        q = self._action_values(obs)
-        best = q == q.max()
-        return (
-            np.where(best, (1 - self.epsilon) / best.sum(), 0.0)
-            + self.epsilon / self.n_actions
-        )
-
     def _sample_action(self, obs, greedy=False):
         if not greedy and self.rng.random() < self.epsilon:
             return int(self.rng.integers(self.n_actions))

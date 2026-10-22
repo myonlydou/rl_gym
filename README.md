@@ -164,6 +164,33 @@ env.set_v(None)             # 清除价值叠加
 | `_generate_epsilon()` | 随机取`s0,a0` 产生一个新的 `epsilon` |
 | `_update(epsilon)` | 使用获得到的`epsilon`来更新`action value`和 `pi`|
 
+### Deep Q-Network（`algorithms/deep_qlearning.py`）✅
+
+环境：`CartPole-v1`。按“主网络 + 目标网络 + 经验回放”实现 DQN。
+
+| 组件/方法 | 说明 |
+|---|---|
+| `ReplayBuffer` | 固定容量 `deque` 保存 `(s, a, r, s', done)`；`sample()` 均匀抽取 mini-batch |
+| `Qnet` | 两层 MLP：`state_dim → hidden_dim → action_dim`，隐藏层 ReLU |
+| `take_action()` | ε-greedy；`greedy=True` 时直接取主网络的 `argmax`（评估/演示） |
+| `update()` | 计算 `y_T = r + γ·max_a q̂(s', a; w_T)`（终止样本只保留 `r`），MSE 反传更新主网络；每 `C` 次更新执行 `w_T = w` |
+| `train()` | 每步写入 buffer，样本数 ≥ `minimal_size` 后每步更新；ε 从 1.0 线性衰减；定期贪心评估并保留最佳参数 |
+| `evaluate()` | 贪心策略跑 20 局，报告平均回报 |
+
+实现细节：
+
+- 构造时先执行 `target_qnet.load_state_dict(qnet.state_dict())`，保证两个网络初始参数相同。
+- 目标值在 `torch.no_grad()` 下计算，目标网络不接收梯度；梯度按范数裁剪到 10。
+- `terminated` 和 `truncated` 都作为 `done`，时间上限样本不再从 `s'` 自举。
+- DQN 训练后期偶尔会突然变差：每 50 局用贪心策略评估 10 局，保留评估最好的参数。
+- 默认超参数：`hidden_dim=128`、`lr=1e-3`、`γ=0.98`、`C=100`、`batch_size=64`、`buffer_size=10000`、`minimal_size=1000`、800 局。
+
+```bash
+python algorithms/deep_qlearning.py                        # 训练 + 贪心评估
+python algorithms/deep_qlearning.py --seed 2 --episodes 800
+python algorithms/deep_qlearning.py --render               # 训练结束后渲染一局
+```
+
 ---
 
 ## 安装
@@ -177,6 +204,7 @@ pip install -e envs/grid_world_env
 ```
 
 参考版本（本仓库开发环境）：Python 3.10.22、gymnasium 1.3.0、pygame 2.6.1、numpy 2.2.6、pandas 2.3.3。
+DQN 示例额外依赖 PyTorch 与 tqdm（参考版本 torch 2.7.1、tqdm 4.70.0）。
 
 ## 运行
 
@@ -185,6 +213,7 @@ python algorithms/policy_iteration.py   # 策略迭代
 python algorithms/value_iteration.py    # 价值迭代
 python algorithms/monte_carlo_exploring_starts.py  
 python algorithms/monte_carlo_epsilon_greedy.py # MC
+python algorithms/deep_qlearning.py     # DQN（CartPole）
 ```
 ---
 
