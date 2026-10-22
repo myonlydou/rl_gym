@@ -129,6 +129,8 @@ class DQN:
 
         episode_over = False
 
+        total_reward = 0.0
+        cnt = 0
         s1 = s0
         while not episode_over:
             a = self._sample_action(s1)
@@ -141,6 +143,11 @@ class DQN:
 
             if self.buffer.size() >= self.batch_size * 10:
                 self._update_qnet(*self.buffer.sample(self.batch_size))
+
+            total_reward += r
+            cnt += 1
+
+        return cnt, total_reward
 
     def evaluate(self, n_episodes=20, seed=None):
         scorces = []
