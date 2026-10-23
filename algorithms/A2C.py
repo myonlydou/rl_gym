@@ -1,7 +1,6 @@
 from QAC import QAC
 
 import torch
-import torch.nn.functional as F
 import numpy as np
 
 
@@ -32,7 +31,6 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     a2c = A2C(n_envs, hidden_dim, gamma, actor_lr, critic_lr, device=device)
-    a2c.reset(seed=0)
 
     pbar = tqdm(range(1, n_steps + 1), desc="训练", unit="步")
     for it in pbar:

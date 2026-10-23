@@ -37,13 +37,7 @@ class QAC:
     合成一个 batch 做一次更新（batch 大小 = n_envs），不用等一整局结束。"""
 
     def __init__(
-        self,
-        n_envs,
-        hidden_dim,
-        gamma,
-        actor_lr,
-        critic_lr,
-        device=None,
+        self, n_envs, hidden_dim, gamma, actor_lr, critic_lr, device=None, seed=None
     ):
 
         self.env = gym.make_vec(
@@ -79,9 +73,10 @@ class QAC:
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=critic_lr)
 
-        self._obs = None
-        self._actions = None
-        self._prev_done = None
+        obs, _ = self.env.reset(seed=seed)
+        self._obs = np.asarray(obs, dtype=np.float32)
+        self._actions = self._sample_actions(self._obs)
+        self._prev_done = np.zeros(self.n_envs, dtype=bool)
 
     # ------------------------------------------------------------------
     def _to_tensor(self, s):
@@ -102,12 +97,6 @@ class QAC:
     @torch.no_grad()
     def _greedy_action(self, s):
         return int(self.actor(self._to_tensor(s)).argmax(dim=-1).item())
-
-    def reset(self, seed=None):
-        obs, _ = self.env.reset(seed=seed)
-        self._obs = np.asarray(obs, dtype=np.float32)
-        self._actions = self._sample_actions(self._obs)
-        self._prev_done = np.zeros(self.n_envs, dtype=bool)
 
     # ------------------------------------------------------------------
     def _update_critic(self, st0, at0, rt, st1, at1, terminated):
@@ -148,13 +137,13 @@ class QAC:
         # 向量环境是自动 reset 的：上一帧刚结束的 env，这一帧拿到的 obs 已经是新一局
         # 的初始状态，于是 (s, a, r=0, s') 是一条假 transition，必须丢掉；否则 critic
         # 会被拉向"终止态 → 新局初始态"这个根本不存在的转移。
-        valid = ~self._prev_done  # type: ignore
+        valid = ~self._prev_done
 
         if valid.any():
-            st0 = self._to_tensor(obs[valid])  # type: ignore
+            st0 = self._to_tensor(obs[valid])
             st1 = self._to_tensor(next_obs[valid])
             at0 = torch.as_tensor(
-                actions[valid], dtype=torch.long, device=self.device  # type: ignore
+                actions[valid], dtype=torch.long, device=self.device
             ).view(-1, 1)
             at1 = torch.as_tensor(
                 next_actions[valid], dtype=torch.long, device=self.device
@@ -224,7 +213,6 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     qac = QAC(n_envs, hidden_dim, gamma, actor_lr, critic_lr, device=device)
-    qac.reset(seed=0)
 
     pbar = tqdm(range(1, n_steps + 1), desc="训练", unit="步")
     for it in pbar:
