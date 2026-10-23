@@ -79,6 +79,8 @@ class A2C:
         self._actions = self._sample_actions(self._obs)
         self._prev_done = np.zeros(self.n_envs, dtype=bool)
 
+        self.rng = np.random.default_rng(seed=seed)
+
     # ------------------------------------------------------------------
     def _to_tensor(self, s):
         x = torch.as_tensor(np.asarray(s), dtype=torch.float32, device=self.device)
@@ -160,7 +162,7 @@ class A2C:
         scorces = []
 
         for _ in range(n_episodes):
-            s, _ = env.reset(seed=seed)
+            s, _ = env.reset(seed=int(self.rng.integers(1 << 31)))
             total_reward = 0.0
 
             episode_over = False
@@ -176,7 +178,7 @@ class A2C:
 
     def play(self, seed=None):
         env = gym.make("CartPole-v1", render_mode="human")
-        s, _ = env.reset(seed=seed)
+        s, _ = env.reset(seed=int(self.rng.integers(1 << 31)))
         total_reward = 0.0
 
         episode_over = False
