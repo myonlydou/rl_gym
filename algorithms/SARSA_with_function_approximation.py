@@ -2,7 +2,7 @@ import numpy as np
 import gymnasium as gym
 
 
-class SarsaWithFunctionApproximation:
+class SARSAWithFunctionApproximation:
 
     def __init__(self, env, gamma, alpha, epsilon, LOW, HIGH, seed=None) -> None:
         self.env = env
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     HIGH = np.array([2.4, 3.0, 0.21, 3.0])
 
     env = gym.make("CartPole-v1")
-    it = SarsaWithFunctionApproximation(env, 0.99, 0.1, 1.0, LOW, HIGH)
+    it = SARSAWithFunctionApproximation(env, 0.99, 0.1, 1.0, LOW, HIGH)
 
     rewards = []
     n_episodes = 6000

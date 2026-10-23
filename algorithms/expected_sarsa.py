@@ -1,10 +1,10 @@
-from sarsa import Sarsa
+from algorithms.SARSA import SARSA
 import numpy as np
 from grid_world_env.envs.grid_world import GridWorldEnv, Actions
 from gymnasium.wrappers import TimeLimit
 
 
-class ExpectedSarsa(Sarsa):
+class ExpectedSarsa(SARSA):
     def _action_value_update(self, s0, a0, r, s1, a1, terminated):
         E = 0
         if not terminated:

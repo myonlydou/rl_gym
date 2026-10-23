@@ -1,10 +1,10 @@
-from sarsa import Sarsa
+from algorithms.SARSA import SARSA
 import numpy as np
 from grid_world_env.envs.grid_world import GridWorldEnv, Actions
 from gymnasium.wrappers import TimeLimit
 
 
-class NStepSarsa(Sarsa):
+class NStepSarsa(SARSA):
     def __init__(self, env, n, alpha, gamma, epsilon, seed) -> None:
         super().__init__(env, alpha, gamma, epsilon, seed)
 

@@ -43,8 +43,6 @@ class REINFORCE:
         )
         self.device = device
 
-        self.update_cnt = 0
-
     def _sample_action(self, s, greedy=False):
         s = torch.as_tensor(s, dtype=torch.float, device=self.device).unsqueeze(0)
         a_probs = self.policy_net(s)

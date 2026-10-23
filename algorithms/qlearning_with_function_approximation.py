@@ -1,10 +1,10 @@
 import numpy as np
 import gymnasium as gym
 
-from sarsa_with_function_approximation import SarsaWithFunctionApproximation
+from algorithms.SARSA_with_function_approximation import SARSAWithFunctionApproximation
 
 
-class QLearningWithFunctionApproximation(SarsaWithFunctionApproximation):
+class QLearningWithFunctionApproximation(SARSAWithFunctionApproximation):
     def _update_omega(self, obs0, a0, r, obs1, a1, terminated=False):
         delta = r - float(self._phi_t(obs0) @ self.omega[:, a0])
         if not terminated:

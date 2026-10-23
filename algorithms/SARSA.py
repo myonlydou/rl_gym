@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 
-class Sarsa:
+class SARSA:
     def __init__(self, env, alpha, gamma, epsilon, seed) -> None:
         self.env = env
         self.base_env: GridWorldEnv = env.unwrapped
@@ -90,17 +90,6 @@ if __name__ == "__main__":
     import random
     import time
 
-    # 这台机器的 Qt 装得不全：PySide6 只有 xcb 插件、没有 libqwayland，而 matplotlib
-    # 默认的 qtagg 后端会崩（启动时报 "Could not find the Qt platform plugin wayland"
-    # 段错误，或在 Qt 事件循环 backend_qt.start_main_loop 里段错误）。
-    # 改用不依赖 Qt 的 Tk 后端（tkinter 8.6 已装，经 XWayland 显示）；
-    # 若连窗口都不想要，换成 matplotlib.use("Agg")，图照样存成 training_curve.png。
-    import matplotlib
-
-    matplotlib.use("TkAgg")
-
-    import matplotlib.pyplot as plt
-
     seed = int(10000 * random.random())
     size = 5
     max_episode_steps = 500
@@ -124,7 +113,7 @@ if __name__ == "__main__":
 
     base_env: GridWorldEnv = env.unwrapped  # type: ignore
 
-    it = Sarsa(env, alpha=0.1, epsilon=0.1, gamma=0.9, seed=seed)
+    it = SARSA(env, alpha=0.1, epsilon=0.1, gamma=0.9, seed=seed)
 
     rewards = []
     episode_lengths = []
@@ -137,33 +126,6 @@ if __name__ == "__main__":
 
         if cnt % 100 == 0:
             print(f"sarsa iterate {cnt}'th...")
-
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-    # ---------- 左图：Rewards ----------
-    axes[0].plot(rewards, alpha=0.3, color="steelblue", label="raw")
-    axes[0].plot(smooth(rewards), color="blue", linewidth=2, label="smoothed")
-    axes[0].set_title("Rewards per Episode")
-    axes[0].set_xlabel("Episode")
-    axes[0].set_ylabel("Reward")
-    axes[0].set_ylim(top=0)  # ★ reward 上限为 0
-    axes[0].axhline(0, color="red", linestyle="--", linewidth=1)
-    axes[0].grid(True, alpha=0.3)
-    axes[0].legend()
-
-    # ---------- 右图：Episode Lengths ----------
-    axes[1].plot(episode_lengths, alpha=0.3, color="salmon", label="raw")
-    axes[1].plot(
-        smooth(episode_lengths), color="darkred", linewidth=2, label="smoothed"
-    )
-    axes[1].set_title("Episode Lengths")
-    axes[1].set_xlabel("Episode")
-    axes[1].set_ylabel("Steps")
-    axes[1].grid(True, alpha=0.3)
-    axes[1].legend()
-
-    plt.tight_layout()
-    plt.show()
 
     pi = it.pi
     env.close()
