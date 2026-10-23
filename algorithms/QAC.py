@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
+import gymnasium as gym
 
 
 class ActorNet(torch.nn.Module):
@@ -32,10 +33,12 @@ class CriticNet(torch.nn.Module):
 
 
 class QAC:
+    """并行版 QAC：n_envs 个环境同时跑，每个向量 step 产出 n_envs 条 transition，
+    合成一个 batch 做一次更新（batch 大小 = n_envs），不用等一整局结束。"""
 
     def __init__(
         self,
-        env,
+        n_envs,
         hidden_dim,
         gamma,
         actor_lr,
@@ -43,12 +46,25 @@ class QAC:
         device=None,
     ):
 
-        self.env = env
-        s, _ = env.reset()
-        self.state_dim = s.shape[0]
-        self.n_actions = env.action_space.n
+        self.env = gym.make_vec(
+            "CartPole-v1", num_envs=n_envs, vectorization_mode="vector_entry_point"
+        )
 
-        self.device = device
+        self.device = device or torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
+
+        # 向量环境：action_space 是 MultiDiscrete，没有 .n，要用 single_*_space
+        single_obs_space = getattr(
+            self.env, "single_observation_space", self.env.observation_space
+        )
+        single_act_space = getattr(
+            self.env, "single_action_space", self.env.action_space
+        )
+
+        self.n_envs = int(getattr(self.env, "num_envs", 1))
+        self.state_dim = int(np.prod(single_obs_space.shape))  # type: ignore
+        self.n_actions = int(single_act_space.n)  # type: ignore
 
         self.actor = ActorNet(self.state_dim, hidden_dim, self.n_actions).to(
             self.device
@@ -63,25 +79,43 @@ class QAC:
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=critic_lr)
 
+        self._obs = None
+        self._actions = None
+        self._prev_done = None
+
+    # ------------------------------------------------------------------
     def _to_tensor(self, s):
-        return torch.as_tensor(
-            np.asarray(s), dtype=torch.float32, device=self.device
-        ).unsqueeze(0)
+        x = torch.as_tensor(np.asarray(s), dtype=torch.float32, device=self.device)
+        return x.unsqueeze(0) if x.dim() == 1 else x  # 兼容单环境 (4,) 和并行 (N,4)
 
-    def _sample_action(self, s, greedy=False):
-        s = torch.as_tensor(s, dtype=torch.float, device=self.device).unsqueeze(0)
-        a_probs = self.actor(s)
+    @torch.no_grad()
+    def _sample_actions(self, s):
+        a_probs = self.actor(self._to_tensor(s))
+        return (
+            torch.distributions.Categorical(a_probs)
+            .sample()
+            .cpu()
+            .numpy()
+            .astype(np.int64)
+        )
 
-        if greedy:
-            return int(a_probs.argmax(dim=-1).item())
+    @torch.no_grad()
+    def _greedy_action(self, s):
+        return int(self.actor(self._to_tensor(s)).argmax(dim=-1).item())
 
-        return int(torch.distributions.Categorical(a_probs).sample().item())
+    def reset(self, seed=None):
+        obs, _ = self.env.reset(seed=seed)
+        self._obs = np.asarray(obs, dtype=np.float32)
+        self._actions = self._sample_actions(self._obs)
+        self._prev_done = np.zeros(self.n_envs, dtype=bool)
 
+    # ------------------------------------------------------------------
     def _update_critic(self, st0, at0, rt, st1, at1, terminated):
         with torch.no_grad():
-            target = rt
-            if not terminated:  # truncated 不是真终止，仍然要 bootstrap
-                target = target + self.gamma * self.critic(st1).gather(1, at1)
+            # terminated 是 (B,1) 的 0/1 张量，批量版不能再写 if not terminated
+            target = rt + self.gamma * self.critic(st1).gather(1, at1) * (
+                1.0 - terminated
+            )
 
         # (a - x) ^ 2 = -2x'(a-x)
         loss = F.mse_loss(self.critic(st0).gather(1, at0), target)
@@ -91,71 +125,86 @@ class QAC:
 
     def _update_actor(self, st0, at0):
         with torch.no_grad():
-            qsa = self.critic(st0).gather(1, at0)
+            q_all = self.critic(st0)
+            qsa = q_all.gather(1, at0)
 
         lnpi = torch.log(self.actor(st0)).gather(1, at0)
-        loss = -lnpi * qsa
+        loss = -(lnpi * qsa).mean()
         self.actor_optimizer.zero_grad()
         loss.backward()
         self.actor_optimizer.step()
 
+    # ------------------------------------------------------------------
     def train(self):
-        s0, _ = self.env.reset()
-        a0 = self._sample_action(s0)
+        """推进一次向量环境（= n_envs 个环境各走一步），并做一次批量更新。"""
 
-        episode_over = False
+        obs, actions = self._obs, self._actions
 
-        total_reward = 0.0
-        cnt = 0
+        next_obs, rewards, terminated, truncated, _ = self.env.step(actions)
+        next_obs = np.asarray(next_obs, dtype=np.float32)
+        rewards = np.asarray(rewards, dtype=np.float32)
+        next_actions = self._sample_actions(next_obs)
 
-        while not episode_over:
-            s1, r, terminated, truncated, _ = self.env.step(a0)
-            a1 = self._sample_action(s1)  # 从 s1 采，只用于 bootstrap，本步不执行
+        # 向量环境是自动 reset 的：上一帧刚结束的 env，这一帧拿到的 obs 已经是新一局
+        # 的初始状态，于是 (s, a, r=0, s') 是一条假 transition，必须丢掉；否则 critic
+        # 会被拉向"终止态 → 新局初始态"这个根本不存在的转移。
+        valid = ~self._prev_done  # type: ignore
 
-            st0 = self._to_tensor(s0)
-            at0 = torch.tensor([a0], dtype=torch.long, device=self.device).view(-1, 1)
-            st1 = self._to_tensor(s1)
-            at1 = torch.tensor([a1], dtype=torch.long, device=self.device).view(-1, 1)
-            rt = torch.tensor([r], dtype=torch.float32, device=self.device).view(-1, 1)
+        if valid.any():
+            st0 = self._to_tensor(obs[valid])  # type: ignore
+            st1 = self._to_tensor(next_obs[valid])
+            at0 = torch.as_tensor(
+                actions[valid], dtype=torch.long, device=self.device  # type: ignore
+            ).view(-1, 1)
+            at1 = torch.as_tensor(
+                next_actions[valid], dtype=torch.long, device=self.device
+            ).view(-1, 1)
+            rt = torch.as_tensor(
+                rewards[valid], dtype=torch.float32, device=self.device
+            ).view(-1, 1)
+            term = torch.as_tensor(
+                terminated[valid], dtype=torch.float32, device=self.device
+            ).view(-1, 1)
 
-            self._update_critic(st0, at0, rt, st1, at1, terminated)
+            self._update_critic(st0, at0, rt, st1, at1, term)
             self._update_actor(st0, at0)
 
-            episode_over = terminated or truncated
+        self._obs, self._actions = next_obs, next_actions
+        self._prev_done = np.logical_or(terminated, truncated)
 
-            s0 = s1
-            a0 = self._sample_action(s1)
-            total_reward += r
-            cnt += 1
+        return int(valid.sum()), float(rewards[valid].mean()) if valid.any() else 0.0
 
-        return cnt, total_reward
-
+    # ------------------------------------------------------------------
     def evaluate(self, n_episodes=20, seed=None):
+        """并行训练、单环境贪心评估（评估用的环境单独开一个）。"""
+        env = gym.make("CartPole-v1")
         scorces = []
 
         for _ in range(n_episodes):
-            s, _ = self.env.reset(seed=seed)
+            s, _ = env.reset(seed=seed)
             total_reward = 0.0
 
             episode_over = False
             while not episode_over:
-                a = self._sample_action(s, greedy=True)
-                s, r, terminated, truncated, _ = self.env.step(a)
-                total_reward += r
+                s, r, terminated, truncated, _ = env.step(self._greedy_action(s))
+
+                total_reward += float(r)
 
                 episode_over = terminated or truncated
             scorces.append(total_reward)
+
+        env.close()
         return np.asarray(scorces, dtype=np.float64)
 
-    def play(self, env, seed=None):
+    def play(self, seed=None):
+        env = gym.make("CartPole-v1", render_mode="human")
         s, _ = env.reset(seed=seed)
         total_reward = 0.0
 
         episode_over = False
         while not episode_over:
-            a = self._sample_action(s, greedy=True)
-            s, r, terminated, truncated, _ = env.step(a)
-            total_reward += r
+            s, r, terminated, truncated, _ = env.step(self._greedy_action(s))
+            total_reward += float(r)
 
             episode_over = terminated or truncated
 
@@ -164,23 +213,23 @@ class QAC:
 
 if __name__ == "__main__":
     from tqdm import tqdm
-    import gymnasium as gym
 
-    n_episodes = 500
+    n_envs = 4096
+    n_steps = 10000  # 向量 step 数；总环境步数 = n_steps * n_envs
 
-    env = gym.make("CartPole-v1")
     hidden_dim = 128
     gamma = 0.99
     actor_lr = 3e-4
     critic_lr = 1e-2
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    qac = QAC(env, hidden_dim, gamma, actor_lr, critic_lr, device=device)
+    qac = QAC(n_envs, hidden_dim, gamma, actor_lr, critic_lr, device=device)
+    qac.reset(seed=0)
 
-    pbar = tqdm(range(1, n_episodes + 1), desc="训练", unit="局")
-    for ep in pbar:
+    pbar = tqdm(range(1, n_steps + 1), desc="训练", unit="步")
+    for it in pbar:
         qac.train()
-        if ep % 100 == 0:
+        if it % 500 == 0:
             scorces = qac.evaluate()
             pbar.set_postfix(
                 score=f"{np.mean(scorces):.1f}",
@@ -190,8 +239,4 @@ if __name__ == "__main__":
     scores = qac.evaluate()
     print(f"贪心评估: {scores.mean():.1f} ± {scores.std():.1f}")
 
-    play_env = gym.make("CartPole-v1", render_mode="human")
-    qac.play(play_env)
-
-    env.close()
-    play_env.close()
+    qac.play()
