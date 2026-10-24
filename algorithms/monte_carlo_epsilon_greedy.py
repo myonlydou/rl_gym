@@ -1,7 +1,7 @@
 from monte_carlo_exploring_starts import MonteCarloExploringStarts
 
 import numpy as np
-from grid_world_env.envs.grid_world import GridWorldEnv, Actions
+import grid_world_env
 from gymnasium.wrappers import TimeLimit
 
 
@@ -46,10 +46,10 @@ if __name__ == "__main__":
     iterate_steps = 10000
 
     env = TimeLimit(
-        GridWorldEnv(render_mode=None, size=size), max_episode_steps=max_episode_steps
+        grid_world_env.GridWorldEnv(render_mode=None, size=size), max_episode_steps=max_episode_steps
     )
 
-    base_env: GridWorldEnv = env.unwrapped  # type: ignore
+    base_env: grid_world_env.GridWorldEnv = env.unwrapped  # type: ignore
 
     env.reset(seed=seed)
 
@@ -77,11 +77,11 @@ if __name__ == "__main__":
     total_reward = 0.0
 
     env = TimeLimit(
-        GridWorldEnv(render_mode="human", size=size),
+        grid_world_env.GridWorldEnv(render_mode="human", size=size),
         max_episode_steps=max_episode_steps,
     )
 
-    base_env: GridWorldEnv = env.unwrapped  # type: ignore
+    base_env: grid_world_env.GridWorldEnv = env.unwrapped  # type: ignore
 
     env.reset(seed=seed)
 
@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
         total_reward += float(r)
 
-        print(f"s={cells[s]} a={Actions(a).name} r={r:+.2f} 累计={total_reward:+.2f}")
+        print(f"s={cells[s]} a={grid_world_env.Actions(a).name} r={r:+.2f} 累计={total_reward:+.2f}")
 
         episode_over = terminated or truncated
 

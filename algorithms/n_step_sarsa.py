@@ -1,6 +1,6 @@
 from algorithms.SARSA import SARSA
 import numpy as np
-from grid_world_env.envs.grid_world import GridWorldEnv, Actions
+import grid_world_env
 from gymnasium.wrappers import TimeLimit
 
 
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     forbidden_locations = [(1, 0), (1, 1), (2, 2), (2, 3), (3, 1)]
 
     env = TimeLimit(
-        GridWorldEnv(
+        grid_world_env.GridWorldEnv(
             size,
             start_cell=start_location,
             target_cell=target_location,
@@ -106,7 +106,7 @@ if __name__ == "__main__":
         max_episode_steps=max_episode_steps,
     )
 
-    base_env: GridWorldEnv = env.unwrapped  # type: ignore
+    base_env: grid_world_env.GridWorldEnv = env.unwrapped  # type: ignore
 
     it = NStepSarsa(env, n=5, alpha=0.1, epsilon=0.1, gamma=0.9, seed=seed)
 
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     env.close()
 
     env = TimeLimit(
-        GridWorldEnv(
+        grid_world_env.GridWorldEnv(
             size,
             start_cell=start_location,
             target_cell=target_location,
@@ -166,7 +166,7 @@ if __name__ == "__main__":
     episode_over = False
     total_reward = 0.0
 
-    base_env: GridWorldEnv = env.unwrapped  # type: ignore
+    base_env: grid_world_env.GridWorldEnv = env.unwrapped  # type: ignore
 
     env.reset(seed=seed)
 
@@ -182,7 +182,7 @@ if __name__ == "__main__":
 
         total_reward += float(r)
 
-        print(f"s={cells[s]} a={Actions(a).name} r={r:+.2f} 累计={total_reward:+.2f}")
+        print(f"s={cells[s]} a={grid_world_env.Actions(a).name} r={r:+.2f} 累计={total_reward:+.2f}")
 
         episode_over = terminated or truncated
 

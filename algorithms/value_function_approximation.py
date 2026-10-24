@@ -1,4 +1,4 @@
-from grid_world_env.envs.grid_world import GridWorldEnv
+import grid_world_env
 from gymnasium.wrappers import TimeLimit
 import numpy as np
 
@@ -7,7 +7,7 @@ class ValueFunctionApproximation:
 
     def __init__(self, env, gamma, alpha, seed=None) -> None:
         self.env = env
-        self.base_env: GridWorldEnv = env.unwrapped
+        self.base_env: grid_world_env.GridWorldEnv = env.unwrapped
 
         self.size = self.base_env.size
         self.n_states = self.size**2
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     seed = 0
     gamma, alpha = 0.9, 0.001
 
-    base_env = GridWorldEnv(
+    base_env = grid_world_env.GridWorldEnv(
         size=size,
         start_cell=(0, 0),
         target_cell=(1, 2),

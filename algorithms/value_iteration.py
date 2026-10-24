@@ -1,4 +1,4 @@
-from grid_world_env.envs.grid_world import GridWorldEnv, Actions
+import grid_world_env
 from gymnasium.wrappers import TimeLimit
 
 
@@ -50,9 +50,9 @@ if __name__ == "__main__":
     import numpy as np
     import time
 
-    env = TimeLimit(GridWorldEnv(render_mode="human", size=10), max_episode_steps=40)
+    env = TimeLimit(grid_world_env.GridWorldEnv(render_mode="human", size=10), max_episode_steps=40)
 
-    base_env: GridWorldEnv = env.unwrapped  # type: ignore
+    base_env: grid_world_env.GridWorldEnv = env.unwrapped  # type: ignore
 
     env.reset()
 
@@ -78,7 +78,7 @@ if __name__ == "__main__":
 
         total_reward += float(r)
 
-        print(f"s={cells[s]} a={Actions(a).name} r={r:+.2f} 累计={total_reward:+.2f}")
+        print(f"s={cells[s]} a={grid_world_env.Actions(a).name} r={r:+.2f} 累计={total_reward:+.2f}")
 
         episode_over = terminated or truncated
 
