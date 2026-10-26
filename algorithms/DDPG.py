@@ -195,7 +195,7 @@ class DDPG:
 
     # ------------------------------------------------------------------
     def _update_critic(self, st0, at0, target):
-        loss = F.mse_loss(self.main_critic(st0, at0), target).mean()
+        loss = F.mse_loss(self.main_critic(st0, at0), target)
         self.critic_optimizer.zero_grad()
         loss.backward()
         self.critic_optimizer.step()
@@ -203,8 +203,8 @@ class DDPG:
     def _update_actor(self, st0):
         # 对 q(s, μ(s)) 求 θ 的梯度，链式法则自动带出 ∇_a q · ∇_θ μ；
         # 这里已经是更新后的 critic（w_{t+1}），所以不再乘 δ
-        self.actor_optimizer.zero_grad()
         loss = -self.main_critic(st0, self.main_actor(st0)).mean()
+        self.actor_optimizer.zero_grad()
         loss.backward()
         self.actor_optimizer.step()
 
@@ -309,7 +309,7 @@ class DDPG:
 if __name__ == "__main__":
     from tqdm import tqdm
 
-    n_envs = 8
+    n_envs = 32
     n_steps = 20000  # 向量 step 数；总环境步数 = n_steps * n_envs
 
     hidden_dim = 128
@@ -317,7 +317,7 @@ if __name__ == "__main__":
     gamma = 0.99
     actor_lr = 1e-5
     critic_lr = 3e-3
-    noise_std, noise_min = 0.3, 0.01
+    noise_std, noise_min = 0.3, 0.1
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     batch_size = 2048
