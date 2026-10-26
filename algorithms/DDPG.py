@@ -72,14 +72,17 @@ class CriticNet(torch.nn.Module):
         super(CriticNet, self).__init__()
 
         self.fc1 = torch.nn.Linear(state_dim + action_dim, hidden_dim)
-        self.fc2 = torch.nn.Linear(hidden_dim, 1)
+        self.fc2 = torch.nn.Linear(hidden_dim, hidden_dim)
+
+        self.fc_out = torch.nn.Linear(hidden_dim, 1)
 
     def forward(self, s, a):
         x = torch.cat([s, a], dim=-1)
         x = self.fc1(x)
         x = F.elu(x)
         x = self.fc2(x)
-        return x
+        x = F.elu(x)
+        return self.fc_out(x)
 
 
 class DDPG:
@@ -228,8 +231,7 @@ class DDPG:
 
         self.buffer.add_batch(obs, actions, rewards, next_obs, terminated, valid)
 
-        if valid.any() and self.buffer.size() >= 10 * self.batch_size:
-
+        if self.buffer.size() >= self.batch_size * 5:
             (
                 sample_obs,
                 sample_actions,
@@ -309,19 +311,19 @@ class DDPG:
 if __name__ == "__main__":
     from tqdm import tqdm
 
-    n_envs = 32
-    n_steps = 20000  # 向量 step 数；总环境步数 = n_steps * n_envs
+    n_envs = 128
+    n_steps = 10000  # 向量 step 数；总环境步数 = n_steps * n_envs
 
-    hidden_dim = 128
-    tau = 0.005
+    hidden_dim = 64
+    tau = 0.05
     gamma = 0.99
-    actor_lr = 1e-5
+    actor_lr = 3e-4
     critic_lr = 3e-3
-    noise_std, noise_min = 0.3, 0.1
+    noise_std = 0.0005
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    batch_size = 2048
-    buffer_size = 200000
+    batch_size = 128
+    buffer_size = 10000
 
     ddpg = DDPG(
         n_envs,
@@ -338,14 +340,8 @@ if __name__ == "__main__":
 
     pbar = tqdm(range(1, n_steps + 1), desc="训练", unit="步")
     for it in pbar:
-        # 探索噪声线性退火：前 60% 从 noise_std 降到 noise_min
-        if it < 0.6 * n_steps:
-            ddpg.noise_std = noise_std + (noise_min - noise_std) * it / (0.6 * n_steps)
-        else:
-            ddpg.noise_std = noise_min
-
         ddpg.train()
-        if it % 1000 == 0:
+        if it % 500 == 0:
             scores = ddpg.evaluate()
             pbar.set_postfix(
                 score=f"{np.mean(scores):.1f}",
