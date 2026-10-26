@@ -147,7 +147,7 @@ class ContinuousCartPoleEnv(gym.Env[np.ndarray, np.ndarray]):
         self,
         sutton_barto_reward: bool = False,
         render_mode: str | None = None,
-        force_mag: float = 10.0,
+        force_mag: float = 20.0,
     ):
         self._sutton_barto_reward = sutton_barto_reward
 
@@ -400,7 +400,7 @@ class ContinuousCartPoleVectorEnv(VectorEnv):
         max_episode_steps: int = 500,
         render_mode: str | None = None,
         sutton_barto_reward: bool = False,
-        force_mag: float = 10.0,
+        force_mag: float = 20.0,
     ):
         self._sutton_barto_reward = sutton_barto_reward
 
@@ -705,7 +705,9 @@ if __name__ == "__main__":
         return float(np.mean(lengths))
 
     rnd = np.random.default_rng(0)
-    print(f"    随机策略 : 平均存活 {rollout(lambda o: rnd.uniform(-1, 1, 1), 20):5.1f} / 500 步")
+    print(
+        f"    随机策略 : 平均存活 {rollout(lambda o: rnd.uniform(-1, 1, 1), 20):5.1f} / 500 步"
+    )
     print(f"    PD 控制器: 平均存活 {rollout(_pd_controller, 20):5.1f} / 500 步")
 
     print()

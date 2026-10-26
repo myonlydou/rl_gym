@@ -195,7 +195,7 @@ if __name__ == "__main__":
     from tqdm import tqdm
 
     n_envs = 8
-    n_steps = 6000  # 向量 step 数；总环境步数 = n_steps * n_envs
+    n_steps = 6000
 
     hidden_dim = 128
     gamma = 0.99
